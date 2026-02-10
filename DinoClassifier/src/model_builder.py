@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 from torch import optim
+from torch.optim.lr_scheduler import LambdaLR, StepLR, CosineAnnealingLR, SequentialLR
 
 
 LOSS_FN_MAP = {
@@ -16,15 +17,55 @@ OPTIMIZER_MAP = {
     'sgd': optim.SGD,
 }
 
-
 def build_loss_fn(name: str):
     """Create loss function from name."""
     return LOSS_FN_MAP[name]()
 
 
-def build_optimizer(name: str, model, lr: float):
+def build_optimizer(name: str, model, lr: float, weight_decay: float = 0.0):
     """Create optimizer from name."""
-    return OPTIMIZER_MAP[name](model.parameters(), lr=lr)
+    return OPTIMIZER_MAP[name](model.parameters(), lr=float(lr), weight_decay=float(weight_decay))
+
+
+def build_scheduler(optimizer, warmup_epochs: int = 0, decay_type: str = 'none',
+                    total_epochs: int = 100, step_size: int = 10, gamma: float = 0.1, eta_min: float = 0.0):
+    eta_min = float(eta_min)
+    gamma = float(gamma)
+    """Create scheduler with optional warmup and decay.
+
+    Args:
+        optimizer: The optimizer
+        warmup_epochs: Number of warmup epochs (0 = disable)
+        decay_type: 'step', 'cosine', or 'none'
+        total_epochs: Total training epochs (for cosine annealing T_max)
+        step_size: Epochs between LR drops (for StepLR)
+        gamma: LR multiplier at each step (for StepLR)
+        eta_min: Minimum LR (for CosineAnnealingLR)
+    """
+    schedulers = []
+    milestones = []
+
+    # Warmup scheduler
+    if warmup_epochs > 0:
+        def lr_lambda(epoch):
+            return min(1.0, (epoch + 1) / warmup_epochs)
+        schedulers.append(LambdaLR(optimizer, lr_lambda))
+        milestones.append(warmup_epochs)
+
+    # Decay scheduler
+    if decay_type == 'step' and step_size > 0:
+        schedulers.append(StepLR(optimizer, step_size=step_size, gamma=gamma))
+    elif decay_type == 'cosine':
+        t_max = total_epochs - warmup_epochs  # remaining epochs after warmup
+        schedulers.append(CosineAnnealingLR(optimizer, T_max=t_max, eta_min=eta_min))
+
+    # Return appropriate scheduler
+    if len(schedulers) == 0:
+        return None
+    elif len(schedulers) == 1:
+        return schedulers[0]
+    else:
+        return SequentialLR(optimizer, schedulers, milestones)
 
 
 class CustomClassifierModel(nn.Module):

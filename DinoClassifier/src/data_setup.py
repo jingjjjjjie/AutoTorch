@@ -84,7 +84,7 @@ def create_dataloaders(
         pin_memory=True,
     )
 
-    return train_dataset, validation_dataset, train_dataloader, validation_dataloader, class_names
+    return train_dataset, validation_dataset, train_dataloader, validation_dataloader, class_names, df_train, df_val
 
 def print_dataset_summary(train_dataset, valid_dataset):
     """Print dataset size and label distribution."""

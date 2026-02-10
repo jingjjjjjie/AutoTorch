@@ -1,9 +1,21 @@
 training:
-  epochs: 100
-  batch_size: 32
-  learning_rate: 0.0001
+  epochs: 5
+  batch_size: 128
+  learning_rate: 1e-4       # 1×10−4; typical is 1e-4 to 1e-5
+  weight_decay: 1e-5        # typical is 1e-2 to 1e-5
   loss_fn: bce_with_logits  # cross_entropy, bce, bce_with_logits, mse
-  optimizer: adam         # adam, adamw, sgd
+  optimizer: adamw          # adam, adamw, sgd
+
+scheduler:
+  warmup_epochs: 3          # 0 = disable; LR ramps 0 → full over N epochs
+  decay_type: cosine        # 'cosine', 'step', or 'none'
+  
+  # StepLR params (if decay_type: step)
+  step_size: 10             # decay every N epochs
+  gamma: 0.1                # LR multiplier at each step
+  
+  # CosineAnnealingLR params (if decay_type: cosine)
+  eta_min: 1e-6             # minimum LR at end of cosine cycle
 
 model:
   repo_dir: /home/jingjie/DinoFT/dinov3
@@ -11,7 +23,7 @@ model:
   hidden_units: 384
   freeze_backbone: false
   save_name: finetuning_test_100epoch_test.pth
-  save_dir: ../trained_models
+  save_dir: ../runs
 
 data:
   train_val_split: 0.9

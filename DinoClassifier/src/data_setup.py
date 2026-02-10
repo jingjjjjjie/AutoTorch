@@ -3,7 +3,8 @@ from PIL import Image
 import torch
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
-from utils import read_data, fix_path
+from utils.data import read_data, fix_path
+import matplotlib.pyplot as plt
 
 NUM_WORKERS = os.cpu_count() -1 
 
@@ -84,3 +85,43 @@ def create_dataloaders(
     )
 
     return train_dataset, validation_dataset, train_dataloader, validation_dataloader, class_names
+
+def visualize_sample_image_from_dataloader(dataloader):
+    mean = torch.tensor([0.485, 0.456, 0.406]).view(3,1,1)
+    std = torch.tensor([0.229, 0.224, 0.225]).view(3,1,1)
+
+    true_img = None
+    false_img = None
+
+    # Loop until we find both classes
+    for images, labels in dataloader:
+        for i in range(len(labels)):
+            if labels[i] == 1 and true_img is None:
+                true_img = images[i]
+
+            if labels[i] == 0 and false_img is None:
+                false_img = images[i]
+
+            if true_img is not None and false_img is not None:
+                break
+        if true_img is not None and false_img is not None:
+            break
+
+    def prep(img):
+        img = img * std + mean
+        img = img.permute(1,2,0).numpy()
+        return img.clip(0,1)
+
+    plt.figure(figsize=(8,4))
+
+    plt.subplot(1,2,1)
+    plt.imshow(prep(false_img))
+    plt.title("Genuine (0)")
+    plt.axis('off')
+
+    plt.subplot(1,2,2)
+    plt.imshow(prep(true_img))
+    plt.title("Fraud (1)")
+    plt.axis('off')
+
+    plt.show()

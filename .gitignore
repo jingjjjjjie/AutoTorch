@@ -1,3 +1,7 @@
+# other files
+record.txt
+dinov3_original_cloned_repo/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

@@ -51,6 +51,13 @@ train_dataset, valid_dataset, train_loader, valid_loader, class_names = create_d
     batch_size=cfg['training']['batch_size']
 )
 
+# Dataset stats
+print(f"\n{'='*40}")
+print(f"Train: {len(train_dataset)} | Val: {len(valid_dataset)}")
+print(f"Train distribution:\n{train_dataset.label_counts()}")
+print(f"Val distribution:\n{valid_dataset.label_counts()}")
+print(f"{'='*40}\n")
+
 # Load the architecture from dinov3's original repository
 dinov3_vits16 = torch.hub.load(
     cfg['model']['repo_dir'], 'dinov3_vits16',

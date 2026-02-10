@@ -86,6 +86,17 @@ def create_dataloaders(
 
     return train_dataset, validation_dataset, train_dataloader, validation_dataloader, class_names
 
+def print_dataset_summary(train_dataset, valid_dataset):
+    """Print dataset size and label distribution."""
+    print(f"\n{'='*40}")
+    print("Dataset Summary")
+    print(f"\n{'='*40}")
+    print(f"Train: {len(train_dataset)} | Val: {len(valid_dataset)}")
+    print(f"Train distribution:\n{train_dataset.label_counts()}")
+    print(f"Val distribution:\n{valid_dataset.label_counts()}")
+    print(f"{'='*40}\n")
+
+
 def visualize_sample_image_from_dataloader(dataloader):
     mean = torch.tensor([0.485, 0.456, 0.406]).view(3,1,1)
     std = torch.tensor([0.229, 0.224, 0.225]).view(3,1,1)

@@ -19,11 +19,10 @@ Trains a PyTorch image classification model using device-agnostic code.
 # /mnt/auto-ekyc/live_data/20250811_Replay_FullPage/mykadfront/orig/20250811_123139.jpg
 # Looking at fix_path(), it checks paths in this order: The function returns path even if the file doesn't exist in ANY of the locations. It should either:
 
-import os
 import torch
 from torch import nn
-import engine, utils
-from model_utils import save_model
+from engine import train
+from utils.model import save_model
 from model_builder import CustomClassifierModel
 from data_setup import create_dataloaders
 from torchvision import transforms
@@ -35,8 +34,8 @@ HIDDEN_UNITS = 384
 LEARNING_RATE = 1e-4
 
 # model loading parameters
-REPO_DIR = "/home/jingjie/dev/dino/dinov3"
-CHECKPOINT_PATH = "/home/jingjie/dev/dino/DinoClassifier/models/dinov3_vits16_pretrain_lvd1689m-08c60483.pth"
+REPO_DIR = "/home/jingjie/DinoFT/dinov3"
+CHECKPOINT_PATH = "/home/jingjie/DinoFT/DinoClassifier/models/dinov3_vits16_pretrain_lvd1689m-08c60483.pth"
 FREEZE_BACKBONE = False
 MODEL_NAME = "finetuning_test_100epoch_test.pth"
 
@@ -137,13 +136,13 @@ optimizer = torch.optim.Adam(model.parameters(),
                              lr=LEARNING_RATE)
 
 # Start training with help from engine.py
-engine.train(model=model,
-             train_dataloader=train_loader,
-             test_dataloader=valid_loader,
-             loss_fn=loss_fn,
-             optimizer=optimizer,
-             epochs=NUM_EPOCHS,
-             device=device)
+train(model=model,
+			train_dataloader=train_loader,
+			test_dataloader=valid_loader,
+			loss_fn=loss_fn,
+			optimizer=optimizer,
+			epochs=NUM_EPOCHS,
+			device=device)
 
 # Save the model with help from utils.py
 save_model(model=model,

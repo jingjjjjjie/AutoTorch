@@ -3,8 +3,7 @@ notes.txt
 dinov3/
 models/
 runs/
-testing_notebook.ipynb
-/home/jingjie/DinoFT/DinoClassifier/src/testing_notebook.ipynb
+**/testing_notebook.ipynb
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

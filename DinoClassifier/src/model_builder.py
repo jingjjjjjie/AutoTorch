@@ -1,5 +1,31 @@
 import torch
 from torch import nn
+from torch import optim
+
+
+LOSS_FN_MAP = {
+    'cross_entropy': nn.CrossEntropyLoss,
+    'bce': nn.BCELoss,
+    'bce_with_logits': nn.BCEWithLogitsLoss,
+    'mse': nn.MSELoss,
+}
+
+OPTIMIZER_MAP = {
+    'adam': optim.Adam,
+    'adamw': optim.AdamW,
+    'sgd': optim.SGD,
+}
+
+
+def build_loss_fn(name: str):
+    """Create loss function from name."""
+    return LOSS_FN_MAP[name]()
+
+
+def build_optimizer(name: str, model, lr: float):
+    """Create optimizer from name."""
+    return OPTIMIZER_MAP[name](model.parameters(), lr=lr)
+
 
 class CustomClassifierModel(nn.Module):
     def __init__(self, backbone_model, backbone_model_output_dim, freeze_backbone=False):

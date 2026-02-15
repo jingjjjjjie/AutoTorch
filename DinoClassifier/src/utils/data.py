@@ -1,3 +1,8 @@
+'''
+Data utilities for loading and preprocessing training data.
+Handles batch CSV files, path resolution across multiple mount points,
+and train/validation splitting.
+'''
 import os
 import logging
 import pandas as pd
@@ -5,6 +10,7 @@ from sklearn.model_selection import train_test_split
 import torch
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+from utils.device import is_main_process
 
 # hardcoded paths for fix path
 source_dirpath = '/mnt/auto-ekyc/idrecapture'
@@ -25,7 +31,7 @@ def fix_path(df,
              live_source_dirpath=live_source_dirpath,
              alt_source_dirpath = alt_source_dirpath,
              alt_alt_source_dirpath= alt_alt_source_dirpath,
-             mnt2_path=MNT2_PATH):
+             ):
 
     def check_path(x):
         path = os.path.join(source_dirpath, x)
@@ -38,8 +44,11 @@ def fix_path(df,
         return path
 
     df = df[df['dataset_type'] == dataset_type]
-    tqdm.pandas(desc=f"Fixing paths ({dataset_type})")
-    df['path'] = df['path'].progress_apply(check_path)
+    if is_main_process():
+        tqdm.pandas(desc=f"Fixing paths ({dataset_type})")
+        df['path'] = df['path'].progress_apply(check_path)
+    else:
+        df['path'] = df['path'].apply(check_path)
 
     return df
 
@@ -59,7 +68,7 @@ def read_data(image_type, batch_list, data_type, train_val_split = None, csv_ima
             """
             # config = configManager.load_idrecapture_config()
             image_absence = False
-            for row in tqdm(range(len(main_data)), desc="Checking image sources"):
+            for row in tqdm(range(len(main_data)), desc="Checking image sources", disable=not is_main_process()):
                 image_path = os.path.join(MNT_PATH, main_data.loc[row]['path'])
                 # print("Mnt: ", image_path)
                 if not os.path.exists(image_path):
@@ -101,7 +110,7 @@ def read_data(image_type, batch_list, data_type, train_val_split = None, csv_ima
                 print("Error in configuration - Batch list is empty.")
                 raise Exception("Error in configuration - Batch list is empty.")
             batch_datas = []
-            for idx in tqdm(range(len(batch_list)), desc="Processing batches"):
+            for idx in tqdm(range(len(batch_list)), desc="Processing batches", disable=not is_main_process()):
                 batch_path = batch_list[idx]
                 # batch_name = batch_path.split(os.sep)[0]
                 batch_name = os.path.join(*batch_path.split(os.sep)[:-1])
@@ -128,7 +137,6 @@ def read_data(image_type, batch_list, data_type, train_val_split = None, csv_ima
                     else: 
                         if from_dataset:
                             if image_type == 'crop':
-                                print(batch_data.columns)
                                 batch_data['path'] = batch_data['ocr_path'].apply(lambda x: os.path.join(batch_name, x))
                             elif image_type == 'corner':
                                 batch_data['path'] = batch_data['corner_path'].apply(lambda x: os.path.join(batch_name, x))
@@ -146,15 +154,14 @@ def read_data(image_type, batch_list, data_type, train_val_split = None, csv_ima
                 else:
                     raise FileNotFoundError("FileNotFoundError: " + csv_path)
                 batch_datas.append(batch_data)
-            print("Concatenating batches...")
+
             main_data = pd.concat(batch_datas).copy()
-            print(f"Concatenated {len(main_data)} rows. Adding labels...")
+   
             main_data['label'] = main_data['fraud_type'].apply(lambda x: 0 if x == 'genuine' else 1)
             grl = bool(int(os.environ.get('GRL', 0)))
             # main_data['label'] = main_data['fraud_type'].apply(lambda x: label_fraud_type(x))
-            print("Resetting index...")
             main_data = main_data.reset_index(drop=True)
-            print("Data processing complete.")
+
             return main_data
         
         def split_data(main_data, train_val_split):

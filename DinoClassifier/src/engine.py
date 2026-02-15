@@ -2,7 +2,7 @@
 Contains functions for training and testing a PyTorch model.
 """
 import torch
-
+from utils.device import is_main_process
 from tqdm.auto import tqdm
 from typing import Dict, List, Tuple
 
@@ -33,7 +33,6 @@ def binary_counts(logits, y_true):
     fn = ((preds == 0) & (y_true == 1)).sum().item()
 
     return tp, tn, fp, fn
-
 
 def compute_metrics(tp, tn, fp, fn):
     """Computes acc, apcer, bpcer from accumulated counts."""
@@ -116,12 +115,18 @@ def train(model: torch.nn.Module,
           loss_fn: torch.nn.Module,
           epochs: int,
           device: torch.device,
-          scheduler=None) -> Dict[str, List]:
+          scheduler=None,
+          sampler=None) -> Dict[str, List]:
     """Trains and tests a PyTorch model.
+
+    Args:
+        sampler: DistributedSampler for DDP (calls set_epoch each epoch)
 
     Returns:
     A dictionary with train/test loss, acc, apcer, bpcer per epoch.
     """
+    
+
     results = {
         "train_loss": [], "train_acc": [], "train_apcer": [], "train_bpcer": [],
         "test_loss": [], "test_acc": [], "test_apcer": [], "test_bpcer": [],
@@ -131,7 +136,10 @@ def train(model: torch.nn.Module,
     model.to(device)
     prev = {}
 
-    for epoch in tqdm(range(epochs)):
+    for epoch in tqdm(range(epochs), disable=not is_main_process()):
+        # Set epoch for distributed sampler (ensures proper shuffling)
+        if sampler is not None:
+            sampler.set_epoch(epoch)
         train_loss, train_acc, train_apcer, train_bpcer = train_step(
             model=model, dataloader=train_dataloader,
             loss_fn=loss_fn, optimizer=optimizer, device=device
@@ -148,17 +156,18 @@ def train(model: torch.nn.Module,
         current_lr = optimizer.param_groups[0]['lr']
         results["lr"].append(current_lr)
 
-        print(
-            f"Epoch: {epoch+1} | "
-            f"train_loss: {color(train_loss, train_loss, prev.get('tl'), True)} | "
-            f"train_acc: {color(train_acc, train_acc, prev.get('ta'))} | "
-            f"train_apcer: {color(train_apcer, train_apcer, prev.get('tap'), True)} | "
-            f"train_bpcer: {color(train_bpcer, train_bpcer, prev.get('tbp'), True)} | "
-            f"test_loss: {color(test_loss, test_loss, prev.get('vl'), True)} | "
-            f"test_acc: {color(test_acc, test_acc, prev.get('va'))} | "
-            f"test_apcer: {color(test_apcer, test_apcer, prev.get('vap'), True)} | "
-            f"test_bpcer: {color(test_bpcer, test_bpcer, prev.get('vbp'), True)}"
-        )
+        if is_main_process():
+            print(
+                f"Epoch: {epoch+1} | "
+                f"train_loss: {color(train_loss, train_loss, prev.get('tl'), True)} | "
+                f"train_acc: {color(train_acc, train_acc, prev.get('ta'))} | "
+                f"train_apcer: {color(train_apcer, train_apcer, prev.get('tap'), True)} | "
+                f"train_bpcer: {color(train_bpcer, train_bpcer, prev.get('tbp'), True)} | "
+                f"test_loss: {color(test_loss, test_loss, prev.get('vl'), True)} | "
+                f"test_acc: {color(test_acc, test_acc, prev.get('va'))} | "
+                f"test_apcer: {color(test_apcer, test_apcer, prev.get('vap'), True)} | "
+                f"test_bpcer: {color(test_bpcer, test_bpcer, prev.get('vbp'), True)}"
+            )
 
         prev = {'tl': train_loss, 'ta': train_acc, 'tap': train_apcer, 'tbp': train_bpcer,
                 'vl': test_loss, 'va': test_acc, 'vap': test_apcer, 'vbp': test_bpcer}
@@ -172,53 +181,3 @@ def train(model: torch.nn.Module,
         results["test_bpcer"].append(test_bpcer)
 
     return results
-
-
-def plot_results(results: Dict[str, List], save_dir: str = None):
-    """Plot training curves and save as separate files."""
-    import matplotlib.pyplot as plt
-    import os
-
-    epochs = range(1, len(results["train_loss"]) + 1)
-
-    def save_plot(name):
-        plt.tight_layout()
-        if save_dir: plt.savefig(os.path.join(save_dir, f"{name}.png"), dpi=150)
-        plt.close()
-
-    # Loss
-    plt.figure(figsize=(8, 6))
-    plt.plot(epochs, results["train_loss"], label="Train")
-    plt.plot(epochs, results["test_loss"], label="Val")
-    plt.xlabel("Epoch"); plt.ylabel("Loss"); plt.title("Loss"); plt.legend()
-    save_plot("loss")
-
-    # Accuracy
-    plt.figure(figsize=(8, 6))
-    plt.plot(epochs, results["train_acc"], label="Train")
-    plt.plot(epochs, results["test_acc"], label="Val")
-    plt.xlabel("Epoch"); plt.ylabel("Accuracy"); plt.title("Accuracy"); plt.legend()
-    save_plot("accuracy")
-
-    # APCER
-    plt.figure(figsize=(8, 6))
-    plt.plot(epochs, results["train_apcer"], label="Train")
-    plt.plot(epochs, results["test_apcer"], label="Val")
-    plt.xlabel("Epoch"); plt.ylabel("APCER"); plt.title("APCER (target: 0.03)"); plt.legend()
-    plt.axhline(y=0.03, color='r', linestyle='--', alpha=0.5, label='Target')
-    save_plot("apcer")
-
-    # BPCER
-    plt.figure(figsize=(8, 6))
-    plt.plot(epochs, results["train_bpcer"], label="Train")
-    plt.plot(epochs, results["test_bpcer"], label="Val")
-    plt.xlabel("Epoch"); plt.ylabel("BPCER"); plt.title("BPCER (target: 0.05)"); plt.legend()
-    plt.axhline(y=0.05, color='r', linestyle='--', alpha=0.5, label='Target')
-    save_plot("bpcer")
-
-    # Learning Rate
-    if results.get("lr"):
-        plt.figure(figsize=(8, 6))
-        plt.plot(epochs, results["lr"])
-        plt.xlabel("Epoch"); plt.ylabel("Learning Rate"); plt.title("Learning Rate Schedule")
-        save_plot("lr")

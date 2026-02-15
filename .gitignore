@@ -3,8 +3,9 @@ notes.txt
 dinov3/
 models/
 runs/
-**/testing_notebook.ipynb
+**/testing.ipynb
 **/train_config.yaml
+**/playground.ipynb
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

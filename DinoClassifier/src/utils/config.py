@@ -1,3 +1,7 @@
+'''
+Configuration utilities for loading YAML config files.
+Provides functions to load training configs from the configs directory.
+'''
 import yaml
 from pathlib import Path
 

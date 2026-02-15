@@ -1,6 +1,9 @@
+# Device: int (e.g. 0), list (e.g. [0,1]), "auto", "all", or "cpu"
+device: 0
+
 training:
-  epochs: 5
-  batch_size: 128
+  epochs: 50
+  batch_size: 16
   learning_rate: 1e-4       # 1×10−4; typical is 1e-4 to 1e-5
   weight_decay: 1e-5        # typical is 1e-2 to 1e-5
   loss_fn: bce_with_logits  # cross_entropy, bce, bce_with_logits, mse
@@ -31,6 +34,9 @@ data:
     - batch_production_202207_redone_rejectedcase/index_annotation.csv
     # - batch_production_202209_redone_rejectedcase/index_annotation.csv
     # - batch_legacy_20221026_subset/index_annotation_ori.csv
+
+dataloader:
+  num_workers: 4
 
 transform:
   image_size: 224

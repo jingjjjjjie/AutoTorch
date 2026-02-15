@@ -4,10 +4,6 @@ Training components: loss functions, optimizers, and schedulers.
 from torch import nn
 from torch import optim
 from torch.optim.lr_scheduler import LambdaLR, StepLR, CosineAnnealingLR, SequentialLR
-from utils.config import get_config
-
-cfg = get_config()
-
 LOSS_FN_MAP = {
     'cross_entropy': nn.CrossEntropyLoss,
     'bce': nn.BCELoss,
@@ -21,18 +17,18 @@ OPTIMIZER_MAP = {
     'sgd': optim.SGD,
 }
 
-def build_loss_fn():
+def build_loss_fn(cfg):
     """Create loss function from config."""
     return LOSS_FN_MAP[cfg['training']['loss_fn']]()
 
-def build_optimizer(model):
+def build_optimizer(cfg, model):
     """Create optimizer from config."""
     name = cfg['training']['optimizer']
     lr = float(cfg['training']['learning_rate'])
     weight_decay = float(cfg['training']['weight_decay'])
     return OPTIMIZER_MAP[name](model.parameters(), lr=lr, weight_decay=weight_decay)
 
-def build_scheduler(optimizer):
+def build_scheduler(cfg, optimizer):
     """Create scheduler from config."""
     warmup_epochs = cfg['scheduler']['warmup_epochs']
     decay_type = cfg['scheduler']['decay_type']

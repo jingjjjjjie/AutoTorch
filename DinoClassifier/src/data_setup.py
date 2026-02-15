@@ -4,13 +4,11 @@ import torch
 from torch.utils.data import Dataset, DataLoader, DistributedSampler
 from torchvision import transforms
 from utils.data import read_data, fix_path
-from utils.config import get_config
 from utils.device import is_main_process
 import matplotlib.pyplot as plt
 
-cfg = get_config()
 
-def get_transform():
+def get_transform(cfg):
     """Create transform from config."""
     t = cfg['transform']
     return transforms.Compose([
@@ -19,8 +17,8 @@ def get_transform():
         transforms.Normalize(mean=t['normalize_mean'], std=t['normalize_std'])
     ])
 
-def create_dataloaders():
-    transform = get_transform()
+def create_dataloaders(cfg):
+    transform = get_transform(cfg)
 
     # takes in the complete list of csv datasets and return a concatenated csv
     data_csv = read_data('ori', cfg['data']['train_batches'], data_type='train', train_val_split=cfg['data']['train_val_split'], csv_image_column=None)

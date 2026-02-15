@@ -24,7 +24,7 @@ def main():
     cfg = get_config()
 
     # Get datasets and dataloaders
-    train_loader, valid_loader, train_sampler, df_train, df_val = create_dataloaders()
+    train_loader, valid_loader, train_sampler, df_train, df_val = create_dataloaders(cfg)
 
     # Load the architecture from dinov3's original repository
     dinov3_vits16 = torch.hub.load(cfg['model']['repo_dir'], 'dinov3_vits16', 
@@ -38,9 +38,9 @@ def main():
     model = wrap_model_ddp(model, local_rank) # Wrap with DDP
 
     # Build loss function, optimizer, and scheduler
-    loss_fn = build_loss_fn()
-    optimizer = build_optimizer(model)
-    scheduler = build_scheduler(optimizer)
+    loss_fn = build_loss_fn(cfg)
+    optimizer = build_optimizer(cfg, model)
+    scheduler = build_scheduler(cfg, optimizer)
 
     # Start training
     results = train(

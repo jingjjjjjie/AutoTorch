@@ -116,7 +116,9 @@ def train(model: torch.nn.Module,
           epochs: int,
           device: torch.device,
           scheduler=None,
-          sampler=None) -> Dict[str, List]:
+          sampler=None,
+          early_stopping=None,
+          checkpoint=None) -> Dict[str, List]:
     """Trains and tests a PyTorch model.
 
     Args:
@@ -179,5 +181,17 @@ def train(model: torch.nn.Module,
         results["test_acc"].append(test_acc)
         results["test_apcer"].append(test_apcer)
         results["test_bpcer"].append(test_bpcer)
+
+        # Save checkpoint (main process only)
+        if checkpoint is not None and is_main_process():
+            checkpoint.save(model, optimizer, epoch, test_loss)
+
+        # Check early stopping condition
+        if early_stopping is not None:
+            early_stopping.check_early_stop(test_loss)
+            if early_stopping.stop_training:
+                if is_main_process():
+                    print(f"Early stopping at epoch {epoch + 1}")
+                break
 
     return results

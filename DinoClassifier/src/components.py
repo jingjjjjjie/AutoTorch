@@ -1,6 +1,8 @@
 '''
 Training components: loss functions, optimizers, and schedulers.
 '''
+import os
+import torch
 from torch import nn
 from torch import optim
 from torch.optim.lr_scheduler import LambdaLR, StepLR, CosineAnnealingLR, SequentialLR
@@ -60,3 +62,61 @@ def build_scheduler(cfg, optimizer):
         return schedulers[0]
     else:
         return SequentialLR(optimizer, schedulers, milestones)
+
+
+class EarlyStopping:
+    def __init__(self, patience=5, delta=0, verbose=False):
+        self.patience = patience
+        self.delta = delta
+        self.verbose = verbose
+        self.best_loss = None
+        self.no_improvement_count = 0
+        self.stop_training = False
+
+    def check_early_stop(self, val_loss):
+        if self.best_loss is None or val_loss < self.best_loss - self.delta:
+            self.best_loss = val_loss
+            self.no_improvement_count = 0
+        else:
+            self.no_improvement_count += 1
+            if self.no_improvement_count >= self.patience:
+                self.stop_training = True
+                if self.verbose:
+                    print("Stopping early as no improvement has been observed.")
+
+
+class Checkpoint:
+    """Saves model and optimizer state at the end of each epoch."""
+
+    def __init__(self, save_dir, save_name):
+        self.ckpt_dir = os.path.join(save_dir, save_name.replace('.pth', ''), 'checkpoints')
+        os.makedirs(self.ckpt_dir, exist_ok=True)
+
+    def save(self, model, optimizer, epoch, val_loss):
+        state = {
+            'epoch': epoch,
+            'model_state_dict': model.module.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'val_loss': val_loss,
+        }
+        path = os.path.join(self.ckpt_dir, f'epoch_{epoch+1}.pt')
+        torch.save(state, path)
+
+
+def build_checkpoint(cfg):
+    """Create Checkpoint from config, or None if disabled."""
+    ckpt = cfg.get('checkpoint', {})
+    if not ckpt.get('enabled', False):
+        return None
+    return Checkpoint(
+        save_dir=cfg['model']['save_dir'],
+        save_name=cfg['model']['save_name'],
+    )
+
+
+def build_early_stopping(cfg):
+    """Create EarlyStopping from config, or None if disabled."""
+    es = cfg.get('early_stopping', {})
+    if not es.get('enabled', False):
+        return None
+    return EarlyStopping(patience=es['patience'], delta=es['delta'], verbose=es['verbose'])

@@ -7,10 +7,14 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from typing import Dict, List
 from utils.model import save_model
+from utils.device import is_main_process
 
 
-def save_run(cfg, results, model, df_train, df_val, elapsed):
-    """Save all training artifacts: config, data splits, logs, plots, model."""
+def save_run(cfg, results, model, df_train, df_val, timer=None):
+    """Save all training artifacts: config, data splits, logs, plots, model. Only runs on main process."""
+    if not is_main_process():
+        return
+
     run_name = cfg['model']['save_name'].replace('.pth', '')
     run_dir = os.path.join(cfg['model']['save_dir'], run_name)
     plots_dir = os.path.join(run_dir, 'plots')
@@ -19,9 +23,12 @@ def save_run(cfg, results, model, df_train, df_val, elapsed):
     os.makedirs(plots_dir, exist_ok=True)
     os.makedirs(dataframe_dir, exist_ok=True)
 
-    # Save config
+    # Save config (with timing if available)
+    save_cfg = {**cfg}
+    if timer:
+        save_cfg['timing'] = timer.summary()
     with open(os.path.join(run_dir, 'config.yaml'), 'w') as f:
-        yaml.dump(cfg, f)
+        yaml.dump(save_cfg, f)
 
     # Save data splits
     df_train.to_csv(os.path.join(dataframe_dir, 'train_data.csv'), index=False)
@@ -35,13 +42,6 @@ def save_run(cfg, results, model, df_train, df_val, elapsed):
 
     # Save model (unwrap DDP with .module)
     save_model(model=model.module, target_dir=run_dir, model_name=cfg['model']['save_name'])
-
-    # Print total time
-    mins, secs = divmod(int(elapsed), 60)
-    hrs, mins = divmod(mins, 60)
-    print("=" * 40)
-    print(f"Total time: {hrs:02d}:{mins:02d}:{secs:02d}")
-    print("=" * 40)
 
 
 def plot_results(results: Dict[str, List], save_dir: str = None):

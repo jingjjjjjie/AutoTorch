@@ -1,6 +1,5 @@
 import time
 
-
 class Timer:
     """Records named time intervals for profiling pipeline stages."""
 

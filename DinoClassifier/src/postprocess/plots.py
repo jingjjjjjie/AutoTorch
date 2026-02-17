@@ -1,47 +1,9 @@
-"""
-Post-training utilities: saving results and plotting.
-"""
+'''
+Training curve plotting utilities.
+'''
 import os
-import yaml
-import pandas as pd
 import matplotlib.pyplot as plt
 from typing import Dict, List
-from utils.model import save_model
-from utils.device import is_main_process
-
-
-def save_run(cfg, results, model, df_train, df_val, timer=None):
-    """Save all training artifacts: config, data splits, logs, plots, model. Only runs on main process."""
-    if not is_main_process():
-        return
-
-    run_name = cfg['model']['save_name'].replace('.pth', '')
-    run_dir = os.path.join(cfg['model']['save_dir'], run_name)
-    plots_dir = os.path.join(run_dir, 'plots')
-    dataframe_dir = os.path.join(run_dir, 'dataframes')
-
-    os.makedirs(plots_dir, exist_ok=True)
-    os.makedirs(dataframe_dir, exist_ok=True)
-
-    # Save config (with timing if available)
-    save_cfg = {**cfg}
-    if timer:
-        save_cfg['timing'] = timer.summary()
-    with open(os.path.join(run_dir, 'config.yaml'), 'w') as f:
-        yaml.dump(save_cfg, f)
-
-    # Save data splits
-    df_train.to_csv(os.path.join(dataframe_dir, 'train_data.csv'), index=False)
-    df_val.to_csv(os.path.join(dataframe_dir, 'val_data.csv'), index=False)
-
-    # Save training logs
-    pd.DataFrame(results).to_csv(os.path.join(run_dir, 'log.csv'), index_label='epoch')
-
-    # Plot training results
-    plot_results(results, save_dir=plots_dir)
-
-    # Save model (unwrap DDP with .module)
-    save_model(model=model.module, target_dir=run_dir, model_name=cfg['model']['save_name'])
 
 
 def plot_results(results: Dict[str, List], save_dir: str = None):

@@ -7,8 +7,6 @@ import os
 import logging
 import pandas as pd
 from sklearn.model_selection import train_test_split
-import torch
-import matplotlib.pyplot as plt
 from tqdm import tqdm
 from utils.device import is_main_process
 
@@ -29,8 +27,8 @@ def fix_path(df,
              dataset_type,
              source_dirpath=source_dirpath,
              live_source_dirpath=live_source_dirpath,
-             alt_source_dirpath = alt_source_dirpath,
-             alt_alt_source_dirpath= alt_alt_source_dirpath,
+             alt_source_dirpath=alt_source_dirpath,
+             alt_alt_source_dirpath=alt_alt_source_dirpath,
              ):
 
     def check_path(x):
@@ -52,7 +50,7 @@ def fix_path(df,
 
     return df
 
-def read_data(image_type, batch_list, data_type, train_val_split = None, csv_image_column=None):
+def read_data(image_type, batch_list, data_type, train_val_split=None, csv_image_column=None):
 
         def check_batch_duplicate(batch_list):
             """
@@ -66,23 +64,16 @@ def read_data(image_type, batch_list, data_type, train_val_split = None, csv_ima
             """
             Method to check whether image source is present in corresponding folder
             """
-            # config = configManager.load_idrecapture_config()
             image_absence = False
             for row in tqdm(range(len(main_data)), desc="Checking image sources", disable=not is_main_process()):
-                image_path = os.path.join(MNT_PATH, main_data.loc[row]['path'])
-                # print("Mnt: ", image_path)
+                image_path = os.path.join(PRIMARY_DATASET_PATH, main_data.loc[row]['path'])
                 if not os.path.exists(image_path):
-                    # image_path = os.path.join(config['root_path']['dataset_path'], 'image_source', 'batches', main_data.loc[row]['path'])
-                    image_path = os.path.join(PRIMARY_DATASET_PATH, main_data.loc[row]['path'])
-                    # print("Primary: ", image_path)
+                    image_path = os.path.join(MNT_PATH, main_data.loc[row]['path'])
                 if not os.path.exists(image_path):
                     image_path = os.path.join(SECONDARY_DATASET_PATH, 'image_source', 'batches', main_data.loc[row]['path'])
-                    # print("Secondary: ", image_path)
                 if not os.path.exists(image_path):
                     image_path = os.path.join(LIVE_PATH, main_data.loc[row]['path'])
-                    # print("Live: ", image_path)
 
-                # if not os.path.exists(os.path.join(os.path.dirname(self.source_dir), 'batches', main_data.loc[row]['path'])):
                 if not os.path.exists(image_path):
                     print(f'Image source with file path {image_path} does not exist')
                     image_absence = True
@@ -104,21 +95,18 @@ def read_data(image_type, batch_list, data_type, train_val_split = None, csv_ima
             """
             Method to combine batches together
             """
-            # config = configManager.load_idrecapture_config()
-            if batch_list is None or len(batch_list) == 0: # To check whether the batch list acquire is empty
+            if batch_list is None or len(batch_list) == 0:
                 logging.info("Error in configuration - Batch list is empty.")
                 print("Error in configuration - Batch list is empty.")
                 raise Exception("Error in configuration - Batch list is empty.")
             batch_datas = []
             for idx in tqdm(range(len(batch_list)), desc="Processing batches", disable=not is_main_process()):
                 batch_path = batch_list[idx]
-                # batch_name = batch_path.split(os.sep)[0]
                 batch_name = os.path.join(*batch_path.split(os.sep)[:-1])
                 csv_path = os.path.join(MNT2_PATH, data_type, batch_path)
                 from_dataset = False
 
                 if not os.path.exists(csv_path):
-                    # csv_path = os.path.join(config['root_path']['dataset_path'], 'image_source', 'batches', batch_path)
                     csv_path = os.path.join(PRIMARY_DATASET_PATH, batch_path)
                     if not os.path.exists(csv_path):
                         csv_path = os.path.join(SECONDARY_DATASET_PATH, 'image_source', 'batches', batch_path)
@@ -128,13 +116,12 @@ def read_data(image_type, batch_list, data_type, train_val_split = None, csv_ima
 
                 if os.path.exists(csv_path):
                     batch_data = pd.read_csv(csv_path)
-                    # if 'path' not in batch_data:
                     if csv_image_column:
                         if from_dataset:
                             batch_data['path'] = batch_data[csv_image_column].apply(lambda x: os.path.join(batch_name, x))
                         else:
                             batch_data['path'] = batch_data.apply(lambda x: os.path.join(x['batch_name'], x[csv_image_column]),axis=1)
-                    else: 
+                    else:
                         if from_dataset:
                             if image_type == 'crop':
                                 batch_data['path'] = batch_data['ocr_path'].apply(lambda x: os.path.join(batch_name, x))
@@ -156,31 +143,27 @@ def read_data(image_type, batch_list, data_type, train_val_split = None, csv_ima
                 batch_datas.append(batch_data)
 
             main_data = pd.concat(batch_datas).copy()
-   
+
             main_data['label'] = main_data['fraud_type'].apply(lambda x: 0 if x == 'genuine' else 1)
             grl = bool(int(os.environ.get('GRL', 0)))
-            # main_data['label'] = main_data['fraud_type'].apply(lambda x: label_fraud_type(x))
             main_data = main_data.reset_index(drop=True)
 
             return main_data
-        
+
         def split_data(main_data, train_val_split):
             train_data, val_data = train_test_split(
                 main_data, train_size=train_val_split, stratify=main_data['label'], random_state=42)
-            
+
             if train_data is not None:
                 train_data['dataset_type'] = 'train'
             if val_data  is not None:
                 val_data ['dataset_type'] = 'validation'
             return train_data, val_data
-    
+
         check_batch_duplicate(batch_list)
         main_data = combine_batch(image_type, batch_list, data_type)
-        # Random subsample
-        # main_data = main_data.sample(frac=0.05)
         if data_type == 'train':
             train_data, val_data = split_data(main_data, train_val_split)
             main_data = pd.concat([train_data, val_data], ignore_index=True)
         check_image_source(main_data)
         return main_data
-

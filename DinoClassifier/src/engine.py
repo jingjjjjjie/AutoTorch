@@ -3,44 +3,9 @@ Contains functions for training and testing a PyTorch model.
 """
 import torch
 from utils.device import is_main_process
+from metrics import count_tp_tn_fp_fn, compute_binary_metrics
 from tqdm.auto import tqdm
 from typing import Dict, List, Tuple
-
-# ANSI colors
-GREEN = "\033[92m"
-RED = "\033[91m"
-RESET = "\033[0m"
-
-def color(val, curr, prev, lower_is_better=False):
-    s = f"{val:.4f}"
-    if prev is None: return s
-    if lower_is_better:
-        if curr < prev: return f"{GREEN}{s}{RESET}"
-        if curr > prev: return f"{RED}{s}{RESET}"
-    else:
-        if curr > prev: return f"{GREEN}{s}{RESET}"
-        if curr < prev: return f"{RED}{s}{RESET}"
-    return s
-
-def binary_counts(logits, y_true):
-    """Returns raw TP, TN, FP, FN counts for a batch."""
-    probs = torch.sigmoid(logits)
-    preds = (probs > 0.5).long()
-
-    tp = ((preds == 1) & (y_true == 1)).sum().item()
-    tn = ((preds == 0) & (y_true == 0)).sum().item()
-    fp = ((preds == 1) & (y_true == 0)).sum().item()
-    fn = ((preds == 0) & (y_true == 1)).sum().item()
-
-    return tp, tn, fp, fn
-
-def compute_metrics(tp, tn, fp, fn):
-    """Computes acc, apcer, bpcer from accumulated counts."""
-    total = tp + tn + fp + fn
-    acc = (tp + tn) / total if total else 0
-    apcer = fn / (tp + fn) if (tp + fn) else 0
-    bpcer = fp / (tn + fp) if (tn + fp) else 0
-    return acc, apcer, bpcer
 
 def train_step(model: torch.nn.Module,
                dataloader: torch.utils.data.DataLoader,
@@ -67,14 +32,14 @@ def train_step(model: torch.nn.Module,
         loss.backward()
         optimizer.step()
 
-        tp, tn, fp, fn = binary_counts(y_pred, y)
+        tp, tn, fp, fn = count_tp_tn_fp_fn(y_pred, y)
         total_tp += tp
         total_tn += tn
         total_fp += fp
         total_fn += fn
 
     train_loss = train_loss / len(dataloader)
-    acc, apcer, bpcer = compute_metrics(total_tp, total_tn, total_fp, total_fn)
+    acc, apcer, bpcer = compute_binary_metrics(total_tp, total_tn, total_fp, total_fn)
     return train_loss, acc, apcer, bpcer
 
 def test_step(model: torch.nn.Module,
@@ -98,14 +63,14 @@ def test_step(model: torch.nn.Module,
             loss = loss_fn(y_pred, y.float())
             test_loss += loss.item()
 
-            tp, tn, fp, fn = binary_counts(y_pred, y)
+            tp, tn, fp, fn = count_tp_tn_fp_fn(y_pred, y)
             total_tp += tp
             total_tn += tn
             total_fp += fp
             total_fn += fn
 
     test_loss = test_loss / len(dataloader)
-    acc, apcer, bpcer = compute_metrics(total_tp, total_tn, total_fp, total_fn)
+    acc, apcer, bpcer = compute_binary_metrics(total_tp, total_tn, total_fp, total_fn)
     return test_loss, acc, apcer, bpcer
 
 def train(model: torch.nn.Module,
@@ -161,18 +126,15 @@ def train(model: torch.nn.Module,
         if is_main_process():
             print(
                 f"Epoch: {epoch+1} | "
-                f"train_loss: {color(train_loss, train_loss, prev.get('tl'), True)} | "
-                f"train_acc: {color(train_acc, train_acc, prev.get('ta'))} | "
-                f"train_apcer: {color(train_apcer, train_apcer, prev.get('tap'), True)} | "
-                f"train_bpcer: {color(train_bpcer, train_bpcer, prev.get('tbp'), True)} | "
-                f"test_loss: {color(test_loss, test_loss, prev.get('vl'), True)} | "
-                f"test_acc: {color(test_acc, test_acc, prev.get('va'))} | "
-                f"test_apcer: {color(test_apcer, test_apcer, prev.get('vap'), True)} | "
-                f"test_bpcer: {color(test_bpcer, test_bpcer, prev.get('vbp'), True)}"
+                f"train_loss: {train_loss:.4f} | "
+                f"train_acc: {train_acc:.4f} | "
+                f"train_apcer: {train_apcer:.4f} | "
+                f"train_bpcer: {train_bpcer:.4f} | "
+                f"test_loss: {test_loss:.4f} | "
+                f"test_acc: {test_acc:.4f} | "
+                f"test_apcer: {test_apcer:.4f} | "
+                f"test_bpcer: {test_bpcer:.4f}"
             )
-
-        prev = {'tl': train_loss, 'ta': train_acc, 'tap': train_apcer, 'tbp': train_bpcer,
-                'vl': test_loss, 'va': test_acc, 'vap': test_apcer, 'vbp': test_bpcer}
         results["train_loss"].append(train_loss)
         results["train_acc"].append(train_acc)
         results["train_apcer"].append(train_apcer)

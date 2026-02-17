@@ -1,3 +1,6 @@
+'''
+Optimizer registry.
+'''
 from torch import optim
 
 OPTIMIZER_MAP = {

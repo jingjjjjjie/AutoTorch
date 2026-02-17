@@ -5,7 +5,7 @@ Provides functions to load training configs from the configs directory.
 import yaml
 from pathlib import Path
 
-config_dir = Path(__file__).parent.parent / "configs"
+config_dir = Path(__file__).parent.parent.parent / "configs"
 
 def load_config(config_path: str) -> dict:
     """Load YAML config file and return as dictionary."""

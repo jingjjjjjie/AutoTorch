@@ -2,17 +2,20 @@
 DDP Training Script
 Run with: torchrun --nproc_per_node=NUM_GPUS train.py
 """
-from engine import train
 from postprocess import save_run
 from utils.config import get_config
 from utils.timer import Timer
 from utils.device import setup_ddp, cleanup_ddp, is_main_process, wrap_model_ddp
-from losses import build_loss_fn
-from optimizers import build_optimizer, build_scheduler
-from callbacks import build_early_stopping, build_checkpoint
 from data import create_dataloaders
-from models import build_dino_backbone, build_head, build_model
-
+from models import build_classifier_model
+from training import (
+    train,
+    build_loss_fn,
+    build_optimizer,
+    build_lr_scheduler,
+    build_early_stopping,
+    build_checkpoint,
+)
 
 def main():
     timer = Timer()
@@ -29,15 +32,13 @@ def main():
     timer.record("data_processing")
 
     # Build model and wrap with DDP
-    backbone = build_dino_backbone(cfg)
-    head = build_head(cfg)
-    model = build_model(backbone, head, cfg, local_rank)
+    model = build_classifier_model(cfg, local_rank)
     model = wrap_model_ddp(model, local_rank)
 
     # Build loss function, optimizer, and scheduler
     loss_fn = build_loss_fn(cfg)
     optimizer = build_optimizer(cfg, model)
-    scheduler = build_scheduler(cfg, optimizer)
+    scheduler = build_lr_scheduler(cfg, optimizer)
 
     # Build early stopping and checkpoint
     early_stopping = build_early_stopping(cfg)

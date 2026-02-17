@@ -3,7 +3,7 @@ Contains functions for training and testing a PyTorch model.
 """
 import torch
 from utils.device import is_main_process
-from metrics import count_tp_tn_fp_fn, compute_binary_metrics
+from evaluation.metrics import count_tp_tn_fp_fn, compute_binary_metrics
 from tqdm.auto import tqdm
 from typing import Dict, List, Tuple
 

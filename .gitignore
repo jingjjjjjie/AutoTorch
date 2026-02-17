@@ -1,7 +1,7 @@
 # other files
 notes.txt
 dinov3/
-models/
+pretrained/
 runs/
 **/testing.ipynb
 **/train_config.yaml

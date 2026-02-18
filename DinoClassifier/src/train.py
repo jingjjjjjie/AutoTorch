@@ -2,7 +2,7 @@
 DDP Training Script
 Run with: torchrun --nproc_per_node=NUM_GPUS train.py
 """
-from postprocess import save_run
+from postprocess import save_pre_training, save_post_training
 from utils.config import get_config
 from utils.timer import Timer
 from utils.device import setup_ddp, cleanup_ddp, is_main_process, wrap_model_ddp
@@ -45,6 +45,9 @@ def main():
     checkpoint = build_checkpoint(cfg)
     timer.record("model_setup")
 
+    # Save config and data splits before training
+    save_pre_training(cfg, df_train, df_val)
+
     # Start training
     results = train(
         model=model,
@@ -61,8 +64,8 @@ def main():
     )
     timer.record("training")
 
-    # Save (guard is inside save_run)
-    save_run(cfg, results, model, df_train, df_val, timer)
+    # Save results, plots, and model (guard is inside save_post_training)
+    save_post_training(cfg, results, model, timer)
 
     # Print timing summary (main process only)
     if is_main_process():

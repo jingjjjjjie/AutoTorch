@@ -32,9 +32,9 @@ def fix_path(df,
              ):
 
     def check_path(x):
-        path = os.path.join(source_dirpath, x)
+        path = os.path.join(alt_source_dirpath, x) # check mnt 3 first
         if not os.path.exists(path):
-            path = os.path.join(alt_source_dirpath, x)
+            path = os.path.join(source_dirpath, x)
         if not os.path.exists(path):
             path = os.path.join(alt_alt_source_dirpath, "image_source", "batches", x)
         if not os.path.exists(path):

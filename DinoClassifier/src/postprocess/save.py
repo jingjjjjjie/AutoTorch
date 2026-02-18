@@ -10,29 +10,48 @@ from utils.device import is_main_process
 from .plots import plot_results
 
 
-def save_run(cfg, results, model, df_train, df_val, timer=None):
-    """Save all training artifacts. Only runs on main process."""
+def save_pre_training(cfg, df_train, df_val):
+    """Save config and data splits before training. Only runs on main process."""
+    if not is_main_process():
+        return
+
+    run_name = cfg['model']['save_name'].replace('.pth', '')
+    run_dir = os.path.join(cfg['model']['save_dir'], run_name)
+    dataframe_dir = os.path.join(run_dir, 'dataframes')
+
+    os.makedirs(run_dir, exist_ok=True)
+    os.makedirs(dataframe_dir, exist_ok=True)
+
+    # Save config
+    with open(os.path.join(run_dir, 'config.yaml'), 'w') as f:
+        yaml.dump(cfg, f)
+
+    # Save data splits
+    df_train.to_csv(os.path.join(dataframe_dir, 'train_data.csv'), index=False)
+    df_val.to_csv(os.path.join(dataframe_dir, 'val_data.csv'), index=False)
+
+    print(f"[INFO] Saved config and data splits to: {run_dir}")
+
+
+def save_post_training(cfg, results, model, timer=None):
+    """Save training results after training. Only runs on main process."""
     if not is_main_process():
         return
 
     run_name = cfg['model']['save_name'].replace('.pth', '')
     run_dir = os.path.join(cfg['model']['save_dir'], run_name)
     plots_dir = os.path.join(run_dir, 'plots')
-    dataframe_dir = os.path.join(run_dir, 'dataframes')
 
     os.makedirs(plots_dir, exist_ok=True)
-    os.makedirs(dataframe_dir, exist_ok=True)
 
-    # Save config (with timing if available)
-    save_cfg = {**cfg}
+    # Update config with timing if available
     if timer:
+        config_path = os.path.join(run_dir, 'config.yaml')
+        with open(config_path, 'r') as f:
+            save_cfg = yaml.safe_load(f)
         save_cfg['timing'] = timer.summary()
-    with open(os.path.join(run_dir, 'config.yaml'), 'w') as f:
-        yaml.dump(save_cfg, f)
-
-    # Save data splits
-    df_train.to_csv(os.path.join(dataframe_dir, 'train_data.csv'), index=False)
-    df_val.to_csv(os.path.join(dataframe_dir, 'val_data.csv'), index=False)
+        with open(config_path, 'w') as f:
+            yaml.dump(save_cfg, f)
 
     # Save training logs
     pd.DataFrame(results).to_csv(os.path.join(run_dir, 'log.csv'), index_label='epoch')

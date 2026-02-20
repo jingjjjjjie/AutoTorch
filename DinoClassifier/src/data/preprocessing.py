@@ -32,14 +32,19 @@ def fix_path(df,
              ):
 
     def check_path(x):
-        path = os.path.join(alt_source_dirpath, x) # check mnt 3 first
-        if not os.path.exists(path):
-            path = os.path.join(source_dirpath, x)
-        if not os.path.exists(path):
-            path = os.path.join(alt_alt_source_dirpath, "image_source", "batches", x)
-        if not os.path.exists(path):
-            path = os.path.join(live_source_dirpath, x)
-        return path
+        path = os.path.join(alt_source_dirpath, x)  # check mnt 3 first
+        if os.path.exists(path):
+            return path
+        path = os.path.join(source_dirpath, x)
+        if os.path.exists(path):
+            return path
+        path = os.path.join(alt_alt_source_dirpath, "image_source", "batches", x) # check mnt 2 
+        if os.path.exists(path):
+            return path
+        path = os.path.join(live_source_dirpath, x)
+        if os.path.exists(path): # modified to raise an error and break training loop as soon as first not found image is present
+            return path
+        raise FileNotFoundError(f"Image not found: {x}")
 
     df = df[df['dataset_type'] == dataset_type]
     if is_main_process():
@@ -50,7 +55,7 @@ def fix_path(df,
 
     return df
 
-def read_data(image_type, batch_list, data_type, train_val_split=None, csv_image_column=None):
+def read_data(image_type, batch_list, data_type, train_val_split=None, csv_image_column=None, split_data=True):
 
         def check_batch_duplicate(batch_list):
             """
@@ -60,28 +65,7 @@ def read_data(image_type, batch_list, data_type, train_val_split=None, csv_image
                 print('There is duplicate batches inside the data configuration file')
                 raise Exception('There is duplicate batches inside the data configuration file')
 
-        def check_image_source(main_data):
-            """
-            Method to check whether image source is present in corresponding folder
-            """
-            image_absence = False
-            for row in tqdm(range(len(main_data)), desc="Checking image sources", disable=not is_main_process()):
-                image_path = os.path.join(PRIMARY_DATASET_PATH, main_data.loc[row]['path'])
-                if not os.path.exists(image_path):
-                    image_path = os.path.join(MNT_PATH, main_data.loc[row]['path'])
-                if not os.path.exists(image_path):
-                    image_path = os.path.join(SECONDARY_DATASET_PATH, 'image_source', 'batches', main_data.loc[row]['path'])
-                if not os.path.exists(image_path):
-                    image_path = os.path.join(LIVE_PATH, main_data.loc[row]['path'])
-
-                if not os.path.exists(image_path):
-                    print(f'Image source with file path {image_path} does not exist')
-                    image_absence = True
-            if image_absence:
-                logging.info(
-                    "Error in image data - some image filepaths within the main data is not available (check logs for more information)")
-                print("Error in image data - some image filepaths within the main data is not available (check logs for more information)")
-                raise Exception("Error in image data - some image filepaths within the main data is not available (check logs for more information)")
+        # deleted legacy check_image_source function - refer to preprocessing_legacy.py
 
         def label_fraud_type(fraud_type):
             if fraud_type is None:
@@ -162,8 +146,10 @@ def read_data(image_type, batch_list, data_type, train_val_split=None, csv_image
 
         check_batch_duplicate(batch_list)
         main_data = combine_batch(image_type, batch_list, data_type)
-        if data_type == 'train':
+
+        if train_val_split:
             train_data, val_data = split_data(main_data, train_val_split)
             main_data = pd.concat([train_data, val_data], ignore_index=True)
-        check_image_source(main_data)
+            return main_data
+
         return main_data

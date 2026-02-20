@@ -52,7 +52,7 @@ def test_step(model: torch.nn.Module,
     A tuple of (test_loss, test_acc, test_apcer, test_bpcer).
     """
     model.eval()
-    test_loss = 0
+    test_loss_sum = 0
     total_tp, total_tn, total_fp, total_fn = 0, 0, 0, 0
 
     with torch.inference_mode():
@@ -61,7 +61,7 @@ def test_step(model: torch.nn.Module,
 
             y_pred = model(X).squeeze(dim=1)  # [batch, 1] -> [batch]
             loss = loss_fn(y_pred, y.float())
-            test_loss += loss.item()
+            test_loss_sum += loss.item()
 
             tp, tn, fp, fn = count_tp_tn_fp_fn(y_pred, y)
             total_tp += tp
@@ -69,7 +69,18 @@ def test_step(model: torch.nn.Module,
             total_fp += fp
             total_fn += fn
 
-    test_loss = test_loss / len(dataloader)
+    # Aggregate metrics across all ranks for DDP (ensures identical values on all ranks)
+    if torch.distributed.is_initialized():
+        stats = torch.tensor(
+            [test_loss_sum, len(dataloader), total_tp, total_tn, total_fp, total_fn],
+            dtype=torch.float64, device=device
+        )
+        torch.distributed.all_reduce(stats)
+        test_loss = stats[0].item() / stats[1].item()
+        total_tp, total_tn, total_fp, total_fn = [int(x) for x in stats[2:].tolist()]
+    else:
+        test_loss = test_loss_sum / len(dataloader)
+
     acc, apcer, bpcer = compute_binary_metrics(total_tp, total_tn, total_fp, total_fn)
     return test_loss, acc, apcer, bpcer
 

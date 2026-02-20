@@ -1,3 +1,5 @@
+from utils.device import is_main_process
+
 class EarlyStopping:
     def __init__(self, patience=5, delta=0, verbose=False):
         self.patience = patience
@@ -15,5 +17,5 @@ class EarlyStopping:
             self.no_improvement_count += 1
             if self.no_improvement_count >= self.patience:
                 self.stop_training = True
-                if self.verbose:
+                if self.verbose and is_main_process():
                     print("Stopping early as no improvement has been observed.")

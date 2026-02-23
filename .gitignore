@@ -8,6 +8,7 @@ runs/
 **/eval_config.yaml
 **/eval_config.yaml
 **/playground.ipynb
+playground/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

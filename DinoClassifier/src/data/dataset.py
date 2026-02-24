@@ -5,7 +5,6 @@ from PIL import Image
 import torch
 from torch.utils.data import Dataset
 
-
 class CSVTorchDataset(Dataset):
     def __init__(self, df, transform=None):
         self.df = df.reset_index(drop=True)

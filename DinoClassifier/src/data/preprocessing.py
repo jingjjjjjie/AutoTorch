@@ -2,6 +2,8 @@
 Data utilities for loading and preprocessing training data.
 Handles batch CSV files, path resolution across multiple mount points,
 and train/validation splitting.
+
+checks mnt3 only - test speed
 '''
 import os
 import logging
@@ -32,17 +34,8 @@ def fix_path(df,
              ):
 
     def check_path(x):
-        path = os.path.join(alt_source_dirpath, x)  # check mnt 3 first
+        path = os.path.join(alt_source_dirpath, x)  # check mnt 3 only
         if os.path.exists(path):
-            return path
-        path = os.path.join(source_dirpath, x)
-        if os.path.exists(path):
-            return path
-        path = os.path.join(alt_alt_source_dirpath, "image_source", "batches", x) # check mnt 2 
-        if os.path.exists(path):
-            return path
-        path = os.path.join(live_source_dirpath, x)
-        if os.path.exists(path): # modified to raise an error and break training loop as soon as first not found image is present
             return path
         raise FileNotFoundError(f"Image not found: {x}")
 
@@ -87,16 +80,8 @@ def read_data(image_type, batch_list, data_type, train_val_split=None, csv_image
             for idx in tqdm(range(len(batch_list)), desc="Processing batches", disable=not is_main_process()):
                 batch_path = batch_list[idx]
                 batch_name = os.path.join(*batch_path.split(os.sep)[:-1])
-                csv_path = os.path.join(MNT2_PATH, data_type, batch_path)
-                from_dataset = False
-
-                if not os.path.exists(csv_path):
-                    csv_path = os.path.join(PRIMARY_DATASET_PATH, batch_path)
-                    if not os.path.exists(csv_path):
-                        csv_path = os.path.join(SECONDARY_DATASET_PATH, 'image_source', 'batches', batch_path)
-                        if not os.path.exists(csv_path):
-                            csv_path = os.path.join(MNT_PATH, batch_path)
-                    from_dataset = True
+                csv_path = os.path.join(PRIMARY_DATASET_PATH, batch_path)
+                from_dataset = True
 
                 if os.path.exists(csv_path):
                     batch_data = pd.read_csv(csv_path)

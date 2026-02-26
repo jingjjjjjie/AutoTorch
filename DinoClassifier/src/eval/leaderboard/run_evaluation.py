@@ -9,14 +9,14 @@ import torch
 import pandas as pd
 from torch.utils.data import DataLoader
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from data.preprocessing_eval import read_data, fix_path
+from data.preprocessing import preprocess_csv, map_path_to_source
 from data.transforms import get_transform
-from data.dataset import CSVTorchDataset
+from data.idfraud_torch_dataset import IDFraudTorchDataset
 from models import build_classifier_model, load_weights_from_checkpoint
 from eval.classification import run_eval_classification, compute_binary_metrics
-from eval.generate_eval_structure import generate_eval_structure, update_batch_metrics
+from eval.leaderboard.generate_eval_structure import generate_eval_structure, update_batch_metrics
 
 
 def get_threshold_metrics_dataframe(probs, labels):
@@ -39,7 +39,7 @@ def get_threshold_metrics_dataframe(probs, labels):
     return pd.DataFrame(results)
 
 
-def run_full_evaluation(cfg, checkpoint_path, batch_list, run_path, device='cuda', csv_image_column='ori_path', batch_size=16, threshold=0.5):
+def run_full_evaluation(cfg, checkpoint_path, batch_list, run_path, device='cuda', image_type='ori', batch_size=16, threshold=0.5):
     """Run full evaluation using existing functions."""
     if device == 'cuda' and not torch.cuda.is_available():
         print("CUDA not available, falling back to CPU")
@@ -47,27 +47,24 @@ def run_full_evaluation(cfg, checkpoint_path, batch_list, run_path, device='cuda
     device = torch.device(device)
     print(f"Using device: {device}")
 
-    # 1. Load model 
+    # 1. Load model
     print("\n1. Loading model...")
     model = build_classifier_model(cfg, device, load_weights=False)
     model = load_weights_from_checkpoint(model, checkpoint_path, device)
     model.eval()
 
-    # 2. Load data using existing read_data from preprocessing_eval
+    # 2. Load data using preprocess_csv and map_path_to_source
     print("\n2. Loading data...")
-    main_data, batch_errors = read_data(csv_image_column, batch_list)
-    if batch_errors: # this dataframe will be null if no errors are found (all batches' csv is found)
-        for err in batch_errors:
-            print(f"   ERROR: {err['batch']}: {err['error']}")
-        raise Exception(f"CSV batch not found: {len(batch_errors)} batches failed to load")
+    main_data, missing_batches = preprocess_csv(image_type=image_type, batch_list=batch_list, training_mode=False)
+    if missing_batches:
+        raise FileNotFoundError(f"CSV batch not found: {missing_batches}")
 
-    df_fixed, df_errors = fix_path(main_data)
-    if len(df_errors) > 0:
-        # Save errors to file
-        errors_path = os.path.join(run_path, 'eval', 'path_errors.csv') # this dataframe will be null if no errors are found (all paths is found on server)
+    df_fixed, missing_paths = map_path_to_source(main_data, training_mode=False)
+    if missing_paths:
+        errors_path = os.path.join(run_path, 'eval', 'path_errors.csv')
         os.makedirs(os.path.dirname(errors_path), exist_ok=True)
-        df_errors.to_csv(errors_path, index=False)
-        raise Exception(f"   ERROR: {len(df_errors)} paths not found, saved to {errors_path}")
+        pd.DataFrame({'path': missing_paths}).to_csv(errors_path, index=False)
+        raise FileNotFoundError(f"{len(missing_paths)} paths not found, saved to {errors_path}")
 
     print(f"   {len(df_fixed)} samples loaded")
 
@@ -78,19 +75,19 @@ def run_full_evaluation(cfg, checkpoint_path, batch_list, run_path, device='cuda
     # checkpoint_path: runs/Ex2_vits16_226test/checkpoints/epoch_10.pt -> checkpoint_name: epoch_10 
     checkpoint_name = os.path.basename(checkpoint_path).replace('.pt', '').replace('.pth', '')
     
-    eval_config = {"eval_batch_size": batch_size, "bin_threshold": threshold, "csv_image_column": csv_image_column}
+    eval_config = {"eval_batch_size": batch_size, "bin_threshold": threshold, "image_type": image_type}
 
     print("\n3. Generating eval structure...")
-    eval_path = generate_eval_structure(run_path, [checkpoint_name], batch_list, df_fixed, eval_config)
+    eval_path = generate_eval_structure(run_path, [checkpoint_name], df_fixed)
 
     # 5. Evaluate each batch
     print("\n4. Running evaluation...")
-    for batch in df_fixed['batch'].unique(): # for each batch in the list
+    for batch in df_fixed['batch_directory'].unique(): # for each batch in the list
         print(f"\n   Batch: {batch}")
-        batch_df = df_fixed[df_fixed['batch'] == batch].copy()
+        batch_df = df_fixed[df_fixed['batch_directory'] == batch].copy()
 
-        # Create dataloader using existing CSVTorchDataset
-        dataset = CSVTorchDataset(batch_df, transform=transform)
+        # Create dataloader using existing IDFraudTorchDataset
+        dataset = IDFraudTorchDataset(batch_df, transform=transform)
         dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
         # Run eval using existing run_eval_classification
@@ -105,7 +102,7 @@ def run_full_evaluation(cfg, checkpoint_path, batch_list, run_path, device='cuda
 
         # Save metrics using update_batch_metrics
         batch_folder = batch.replace('/', '_').replace('\\', '_')
-        batch_path = os.path.join(eval_path, 'infer_results', checkpoint_name, batch_folder)
+        batch_path = os.path.join(eval_path, checkpoint_name, batch_folder)
         update_batch_metrics(batch_path, metrics_dict, threshold_df, eval_config, batch_list, checkpoint_name)
 
         # Save predictions to CSV
@@ -121,7 +118,7 @@ def run_full_evaluation(cfg, checkpoint_path, batch_list, run_path, device='cuda
     return eval_path
 
 
-def run_evaluation_from_folder(run_path, batch_list, checkpoints='all', device='cuda', csv_image_column='ori_path', batch_size=16, threshold=0.5):
+def run_evaluation_from_folder(run_path, batch_list, checkpoints='all', device='cuda', image_type='ori', batch_size=16, threshold=0.5):
     """
     Run evaluation for all checkpoints in a run folder.
 
@@ -130,7 +127,7 @@ def run_evaluation_from_folder(run_path, batch_list, checkpoints='all', device='
         batch_list: List of batch CSV paths to evaluate
         checkpoints: 'all' for all checkpoints, or list of checkpoint names like ['epoch_10', 'epoch_20']
         device: 'cuda' or 'cpu'
-        csv_image_column: Column name for image paths in CSV
+        image_type: Image type to use ('ori', 'crop', or 'corner')
         batch_size: Batch size for evaluation
         threshold: Classification threshold
     """
@@ -178,7 +175,7 @@ def run_evaluation_from_folder(run_path, batch_list, checkpoints='all', device='
             batch_list=batch_list,
             run_path=run_path,
             device=device,
-            csv_image_column=csv_image_column,
+            image_type=image_type,
             batch_size=batch_size,
             threshold=threshold
         )
@@ -207,7 +204,7 @@ if __name__ == "__main__":
             run_path=run_path,
             batch_list=batch_list,
             checkpoints='all',  # or 'all'
-            csv_image_column='ori_path',
+            image_type='ori',
         )
     except Exception as e:
         import traceback

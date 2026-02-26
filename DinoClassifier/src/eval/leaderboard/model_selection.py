@@ -1,281 +1,271 @@
 import os
 import json
 import pandas as pd
-
 from glob import glob
 
-def jprint(dict):
-    print(json.dumps(dict, indent=4))
-
-debug = True
 
 class ModelSelection:
     """ Model Selection to sort the model by weighted scoreboard. """
-    def __init__(self, score_criteria, run_type, model_type=None):
+    def __init__(self, score_criteria, json_file='info.json', model_type=None):
         self.model_type = model_type
-        self.score_weight = score_criteria['weight']
-        self.lower_as_pass_criteria = score_criteria['lower_as_pass']
-        self.greater_as_pass_criteria = score_criteria['greater_as_pass']
+        self.json_file = json_file
+        self.bin_threshold = 0.5
 
-        # select_model_type = model_type if model_type != 'parallel' else 'ori'
-        for criteria in [self.score_weight, self.lower_as_pass_criteria, self.greater_as_pass_criteria]:
-            if criteria is not None:
-                for field_data in criteria:
-                    field_data['dataset'] = field_data['data_source']
-                    field_data['field'] = field_data['data_source'] + '.' + field_data['metric']
+        self.score_weight = score_criteria['weight']
 
         self.field_cols = []
-        self.pass_criteria_field_cols = []
-        for criteria in [self.score_weight]:
-            for field_data in criteria:
-                field = field_data['field']
-                if field not in self.field_cols:
-                    self.field_cols.append(field)
-        for criteria in [self.lower_as_pass_criteria, self.greater_as_pass_criteria]:
-            if criteria is not None:
-                for field_data in criteria:
-                    field = field_data['field']
-                    if field not in self.field_cols:
-                        self.field_cols.append(field)
-                    if field not in self.pass_criteria_field_cols:
-                        self.pass_criteria_field_cols.append(field)
-
-        if run_type == 'idFraud':
-            self.json_file = 'info.json'
-        elif run_type == 'idPhysicalTamper':
-            self.json_file = 'fraud_detection_summary.json'
-        elif run_type == 'idLandmark':
-            self.json_file = 'object_summary_report.json'
-
-        self.bin_threshold = 0.5
-    def find_filepath_by_basename(self, file_paths, target_basename):
-        result = None
-        for file_path in file_paths:
-            filename = os.path.basename(file_path)
-            if os.path.splitext(filename)[0] == target_basename:
-                result = file_path
-        if result is None:
-            return None
-        return result
+        for entry in self.score_weight:
+            entry['dataset'] = entry['data_source']
+            entry['field'] = entry['data_source'] + '.' + entry['metric'] # generate field columns, for example "batch_xyz.apcer"
+            if entry['field'] not in self.field_cols:
+                self.field_cols.append(entry['field'])
     
 
-    def run_checkpoint(self, model, artifact_dir=None):
-        model_path = os.path.join(artifact_dir, model)
-        ckpt_paths = glob(os.path.join(model_path, 'eval/*/'))
-        ckpt_model_paths = glob(os.path.join(model_path, 'checkpoints/*.pt'))
-        return self.run(ckpt_paths, ckpt_model_paths)
-    
-
-    def run(self, ckpt_paths, ckpt_model_paths, thres_setting='all'):
-        ckpt_dicts = self.get_ckpt_with_eval_dicts(ckpt_paths, ckpt_model_paths)
-        leaderboard_df = self.generate_leaderboard(ckpt_dicts, thres_setting)
+    def _find_ckpt_path_by_basename(self, file_paths, target_basename):
+        """Return the file path whose basename matches the target."""
         
-        # return the best model
-        best_sorted_model = leaderboard_df.iloc[0,:].to_dict()
-        selector = [True] * len(leaderboard_df)
+        for full_file_path in file_paths:
+            filename_with_extension = os.path.basename(full_file_path)
+            filename_without_extension = os.path.splitext(filename_with_extension)[0]
 
-        for criteria_standard, criteria in [['lower_as_pass', self.lower_as_pass_criteria], ['greater_as_pass', self.greater_as_pass_criteria]]:
-            if criteria is not None:
-                for field_data in criteria:
-                    col = field_data['field'] + '_' + criteria_standard
-                    selector &= leaderboard_df[col] == True
-        best_sorted_model_with_pass = leaderboard_df[selector]
-        
-        if len(best_sorted_model_with_pass) > 0:
-            best_sorted_model_with_pass = best_sorted_model_with_pass.iloc[0,:].to_dict()
-        else:
-            best_sorted_model_with_pass = None
-        return best_sorted_model, best_sorted_model_with_pass, leaderboard_df
-    
-    
-    def get_ckpt_with_eval_dicts(self, ckpt_paths, ckpt_model_paths):
-        ckpt_dicts = [{'ckpt_path': p} for p in ckpt_paths]
-        for i in range(len(ckpt_dicts)):
-            ckpt_dict = ckpt_dicts[i]
-            epoch = ckpt_dict['ckpt_path'].split('/')[-2]
-            ckpt_dict['epoch'] = epoch
-            ckpt_dict['ckpt_model_path'] = self.find_filepath_by_basename(ckpt_model_paths, epoch)
-            # eval_paths = os.path.join(ckpt_dict['ckpt_path'], 'logs/evaluate/*/')
-            # eval_paths = glob(eval_paths)
-            eval_paths = glob(os.path.join(ckpt_dict['ckpt_path'],"*"))
-            if debug:
-                print('eval_paths', eval_paths)
-                print('len(eval_paths)', len(eval_paths))
-            ckpt_dict['evaluation'] = {}
-            for eval_path in eval_paths:
-                if debug:
-                    print('eval_path', eval_path)
-                eval_dict = {}
-                eval_dict['eval_path'] = eval_path
-                
-                # search evaluation csv  
-                dataset_name = eval_path.rsplit(os.sep, 1)[1]
-                eval_dict['eval_csv'] = os.path.join(eval_path, f'{dataset_name}.csv')
-                
-                # read evaluation info json & get the metrics
-                eval_dict['eval_info_json'] = os.path.join(eval_path, self.json_file)
-                with open(eval_dict['eval_info_json']) as fid:
-                    eval_info_json = json.loads(fid.read())
-                eval_set = list(eval_info_json['metrics'].keys())
-                eval_dict['threshold'] = self.bin_threshold 
-                for key in eval_set:
-                    eval_dict[key] = {}
-                    metrics = eval_info_json['metrics'][key]
-                    eval_dict[key]['TP'] = metrics['TP']
-                    eval_dict[key]['FP'] = metrics['FP']
-                    eval_dict[key]['TN'] = metrics['TN']
-                    eval_dict[key]['FN'] = metrics['FN']
-                    # eval_dict['accuracy'] = metrics['accuracy']
-                    eval_dict[key]['apcer'] = max(0, metrics['apcer'])
-                    eval_dict[key]['bpcer'] = max(0, metrics['bpcer'])
-                    if 'acer' in metrics:
-                        eval_dict[key]['acer'] = metrics['acer']
-                    else:
-                        eval_dict[key]['acer'] = (max(0, metrics['apcer']) + max(0, metrics['bpcer'])) /2
-                    if 'accuracy' in metrics:
-                        eval_dict[key]['accuracy'] = metrics['accuracy']
-                    else:
-                        eval_dict[key]['accuracy'] = metrics['acc']
-
-                ckpt_dict['evaluation'][dataset_name] = eval_dict
-        return ckpt_dicts  
-
-
-        #         # read evaluation info json & get the metrics
-        #         eval_dict['eval_info_json'] = os.path.join(eval_path, 'fraud_detection_summary.json')
-        #         with open(eval_dict['eval_info_json']) as fid:
-        #             eval_info_json = json.loads(fid.read())
-
-        #         eval_dict['threshold'] = 0.5
-        #         # eval_dict['threshold'] = eval_info_json['eval']['bin_threshold']
-
-        #         key = 'threshold_0.5'
-        #         eval_dict[key] = {}
-        #         metrics = eval_info_json
-        #         eval_dict[key]['TP'] = metrics['TP']
-        #         eval_dict[key]['FP'] = metrics['FP']
-        #         eval_dict[key]['TN'] = metrics['TN']
-        #         eval_dict[key]['FN'] = metrics['FN']
-        #         #eval_dict['accuracy'] = metrics['accuracy']
-        #         eval_dict[key]['apcer'] = max(0, metrics['apcer'])
-        #         eval_dict[key]['bpcer'] = max(0, metrics['bpcer'])
-        #         if 'acer' in metrics:
-        #             eval_dict[key]['acer'] = metrics['acer']
-        #         else:
-        #             eval_dict[key]['acer'] = (max(0, metrics['apcer']) + max(0, metrics['bpcer'])) /2
-        #         if 'accuracy' in metrics:
-        #             eval_dict[key]['accuracy'] = metrics['accuracy']
-        #         else:
-        #             eval_dict[key]['accuracy'] = metrics['acc']
-
-        #         ckpt_dict['evaluation'][dataset_name] = eval_dict
-        # return ckpt_dicts
+            if filename_without_extension == target_basename:
+                return full_file_path
+            
+        return None
     
 
-    def generate_leaderboard(self, ckpt_dicts, thres_setting):  
-        final_leaderboard_df = pd.DataFrame()
-        if debug:
-            print ("Ckpt Dicts: "+str(ckpt_dicts))            
-        for ckpt_dict in ckpt_dicts: 
-            if debug:
-                print('ckpt_path', ckpt_dict['ckpt_path'])
-            leaderboard_df_list = []  
-            leaderboard_df_merged = pd.DataFrame()
-            for field in self.field_cols: 
-                if debug:
-                    print('field', field)
-                # Loop through declared field cols to extract required dataset name and metric for leaderboard.
-                leaderboard_list = []
+    def _collect_experiment_paths(self, experiment_dir_name, runs_dir_path, checkpoint_dir_name='checkpoints', evaluation_dir_name='eval', format='*.pt'):
+        """Collect evaluation directories and checkpoint file paths for an experiment.
+            Returns:
+            Tuple of (evaluation_epoch_dirs, checkpoint_file_paths).
+        """
+        experiment_dir_path = os.path.join(runs_dir_path, experiment_dir_name)
+
+        # Collect evaluation epoch directories
+        evaluation_dir_path = os.path.join(experiment_dir_path, evaluation_dir_name)
+        evaluation_subdir_pattern = os.path.join(evaluation_dir_path, "*/")
+        evaluation_epoch_dirs = glob(evaluation_subdir_pattern)
+
+        # Collect checkpoint file paths
+        checkpoints_dir = os.path.join(experiment_dir_path, checkpoint_dir_name)
+        checkpoint_file_pattern = os.path.join(checkpoints_dir, format)
+        checkpoint_file_paths = glob(checkpoint_file_pattern)
+
+        return evaluation_epoch_dirs, checkpoint_file_paths
+    
+
+    def _extract_and_standardize_metrics_from_metrics_dict(self, raw_metrics_dict):
+        """Extract and standardize raw evaluation metrics from an evaluation json.
+        Args:
+            raw_metrics_dict: Metric dictionary from evaluation JSON.
+        """
+        apcer = max(0, raw_metrics_dict["apcer"])
+        bpcer = max(0, raw_metrics_dict["bpcer"])
+        acer = (
+            raw_metrics_dict["acer"]
+            if "acer" in raw_metrics_dict
+            else (apcer + bpcer) / 2
+        )
+        accuracy = (
+            raw_metrics_dict["accuracy"]
+            if "accuracy" in raw_metrics_dict
+            else raw_metrics_dict["acc"]
+        )
+        return {
+            "TP": raw_metrics_dict["TP"],
+            "FP": raw_metrics_dict["FP"],
+            "TN": raw_metrics_dict["TN"],
+            "FN": raw_metrics_dict["FN"],
+            "apcer": apcer,
+            "bpcer": bpcer,
+            "acer": acer,
+            "accuracy": accuracy,
+        }
+    
+
+    def _build_dataset_evaluation(self, dataset_dir):
+        """Build evaluation data for a single dataset directory.
+
+        Args:
+            dataset_dir (str): Path to a dataset evaluation folder.
+
+        Returns:
+            dict: Structured dict with 'metadata' and 'results' keys.
+        """
+        dataset_name = os.path.basename(dataset_dir)
+        evaluation_json_path = os.path.join(dataset_dir, self.json_file)
+
+        with open(evaluation_json_path) as f:
+            evaluation_data = json.load(f)
+
+        dataset_evaluation = {
+            "metadata": {
+                "eval_path": dataset_dir,
+                "eval_csv": os.path.join(dataset_dir, f"{dataset_name}.csv"),
+                "eval_info_json": evaluation_json_path,
+                "threshold": self.bin_threshold
+            },
+            "results": {}
+        }
+
+        for threshold_name, raw_metrics_dict in evaluation_data["metrics"].items():
+            dataset_evaluation["results"][threshold_name] = (
+                self._extract_and_standardize_metrics_from_metrics_dict(raw_metrics_dict)
+            )
+
+        return dataset_evaluation
+    
+
+    def _build_checkpoint_records(self, eval_epoch_dirs, checkpoint_file_paths):
+
+        checkpoint_records = []  # List to store structured results for each epoch
+        # Iterate over each epoch evaluation directory
+        for eval_epoch_dir in eval_epoch_dirs: # Example /Ex2_vits16_226test/eval/epoch_9/
+            epoch_name = os.path.basename(os.path.normpath(eval_epoch_dir)) # Example: ".../epoch_20/" → "epoch_20"
+
+            # Initialize the record for this epoch
+            checkpoint_record = {
+                "metadata": {
+                    "ckpt_path": eval_epoch_dir,
+                    "epoch": epoch_name,
+                    "ckpt_model_path": self._find_ckpt_path_by_basename(checkpoint_file_paths, epoch_name)
+                },
+                "datasets": {}
+            }
+
+            dataset_pattern = os.path.join(eval_epoch_dir, "*")
+            dataset_dirs = glob(dataset_pattern)
+
+            for dataset_dir in dataset_dirs:
+                dataset_name = os.path.basename(dataset_dir)
+                checkpoint_record["datasets"][dataset_name] = self._build_dataset_evaluation(dataset_dir)
+
+            checkpoint_records.append(checkpoint_record)
+
+        return checkpoint_records
+
+
+    def _calculate_weighted_score(self, row):
+        """
+        Calculate weighted score for a single row.
+
+        Formula: score = Σ(m̂_i * |w_i|) / Σ(|w_i|)
+        Where:   m̂_i = 1 - m_i  (lower is better, all metrics in current codebase)
+        """
+        score = 0
+        total_weight = 0
+
+        for weight_config in self.score_weight:
+            field = weight_config['field']
+            weight = weight_config['value']
+
+            total_weight += abs(weight)
+            metric_value = row[field]
+
+            # TODO: currently only supports "lower is better" metrics
+            metric_value = 1 - metric_value
+
+            score += metric_value * abs(weight)
+
+        return round(score / total_weight, 3)
+
+
+    def _generate_leaderboard(self, checkpoint_records):
+        """Generate leaderboard DataFrame from checkpoint records."""
+        all_checkpoints_df = pd.DataFrame()
+
+        for checkpoint_record in checkpoint_records: # loop through each epoch's records
+            field_dataframes = []
+            checkpoint_df = pd.DataFrame()
+
+            for field in self.field_cols: # example field: "batch_xyz.apcer"
+                rows = []
                 dataset_name, metric = field.split('.')
-                # dataset_name = dataset_name.rsplit('_',1)[0]
-                ignore_keys = ['eval_path','eval_csv','eval_info_json','threshold'] # Keys to ignore in the ckpt_dict
 
-                if dataset_name not in ckpt_dict['evaluation']:
-                    raise ValueError(f"{dataset_name} not in checkpoint {ckpt_dict['ckpt_path']}")
+                if dataset_name not in checkpoint_record['datasets']:
+                    raise ValueError(f"{dataset_name} not in checkpoint {checkpoint_record['metadata']['ckpt_path']}")
 
-                thresholds = ckpt_dict['evaluation'][dataset_name].keys()
+                results = checkpoint_record['datasets'][dataset_name]['results']
 
-                for key in thresholds:
-                    # Loop through all threshold for the given dataset name and create a dataframe.
-                    model_dict = {}
-                    model_dict['model'] = ckpt_dict['ckpt_model_path']
-                    model_dict['model_epoch'] = ckpt_dict['epoch'] 
-                    if thres_setting == 'all' and key not in ignore_keys:
-                        if self.model_type == 'parallel':
-                            model_dict['threshold'] = key  # Create threshold column for "all" parallel model selection
-                        
-                        model_dict[field] = ckpt_dict['evaluation'][dataset_name][key][metric]
-                        leaderboard_list.append(model_dict)
-                        leaderboard_df = pd.DataFrame(leaderboard_list)
+                for threshold_key, threshold_results in results.items():
+                    row = {
+                        'model': checkpoint_record['metadata']['ckpt_model_path'],
+                        'model_epoch': checkpoint_record['metadata']['epoch'],
+                        'threshold': threshold_key,
+                        field: threshold_results[metric]
+                    }
+                    rows.append(row)
 
-                    elif thres_setting == 'single' and key not in ignore_keys and key == 'threshold_0.5':
-                        model_dict['threshold'] = key
-                        model_dict[field] = ckpt_dict['evaluation'][dataset_name][key][metric]
-                        leaderboard_list.append(model_dict)
-                        leaderboard_df = pd.DataFrame(leaderboard_list)
+                field_dataframes.append(pd.DataFrame(rows))
 
-                    elif thres_setting == 'single' and key not in ignore_keys and key == 'threshold' and ckpt_dict['evaluation'][dataset_name][key] == 0.5:
-                        model_dict['threshold'] = 'threshold_0.5'
-                        model_dict[field] = ckpt_dict['evaluation'][dataset_name]["test"][metric]
-                        leaderboard_list.append(model_dict)
-                        leaderboard_df = pd.DataFrame(leaderboard_list)
-
-                leaderboard_df_list.append(leaderboard_df) # Append all the dataset with thresold datafrom into a single list.
-
-            for index in range(len(leaderboard_df_list)):
-                # Merge the list into a single dataframe.
-                if leaderboard_df_merged.empty:
-                    leaderboard_df_merged = leaderboard_df_list[index]
+            # Merge all field dataframes for this checkpoint
+            for df in field_dataframes:
+                if checkpoint_df.empty:
+                    checkpoint_df = df
                 else:
-                    leaderboard_df_merged = pd.merge(leaderboard_df_merged, leaderboard_df_list[index])
-            # Concat dataframes with one another when there are multiple models.
-            final_leaderboard_df = pd.concat([final_leaderboard_df, leaderboard_df_merged], axis=0)
-        leaderboard_df = final_leaderboard_df
-        
-        def apply_pass_criteria(row):
-            """
-            pass criteria x 2
-                take every required score
-                check criteria
-            """    
-            if self.lower_as_pass_criteria is not None:    
-                for field_data in self.lower_as_pass_criteria:    
-                    field = field_data['field']
-                    pass_criteria = field_data['value']
+                    checkpoint_df = pd.merge(checkpoint_df, df)
 
-                    metric_score = row[field]
-                    row[f'{field}_lower_as_pass'] = metric_score < pass_criteria
-            if self.greater_as_pass_criteria is not None:    
-                for field_data in self.greater_as_pass_criteria:
-                    field = field_data['field']
-                    pass_criteria = field_data['value']
-                    metric_score = row[field]
-                    row[f'{field}_greater_as_pass'] = metric_score > pass_criteria
-            return row
-        leaderboard_df = leaderboard_df.apply(apply_pass_criteria, axis=1)
-        def apply_score(row):
-            """
-            calculate the score 
-                take every score weight
-                get the value of the field
-                multiply with the weight
-                sum
-            """    
-            score = total_weight = 0
-            for field_data in self.score_weight:
-                
-                field = field_data['field']
-                weight = field_data['value']
-                total_weight += abs(weight)
-                metric_score = row[field]
-                is_desc = weight < 0
-                if is_desc:
-                    metric_score = 1 - metric_score
-                score += metric_score * abs(weight)
-            score = score/total_weight
-            return round(score, 3)
-        if debug:
-            print('leaderboard_df', leaderboard_df.columns)
-        leaderboard_df['score'] = leaderboard_df.apply(apply_score, axis=1)
+            all_checkpoints_df = pd.concat([all_checkpoints_df, checkpoint_df], axis=0)
+
+        leaderboard_df = all_checkpoints_df
+        leaderboard_df['score'] = leaderboard_df.apply(self._calculate_weighted_score, axis=1)
         leaderboard_df = leaderboard_df.sort_values(by='score', ascending=False)
         return leaderboard_df
+
+
+    def run(self, eval_epoch_dirs, checkpoint_file_paths):
+        """Generate leaderboard and return best model.
+
+        Args:
+            eval_epoch_dirs: Paths to evaluation epoch directories (e.g., eval/epoch_*/).
+            checkpoint_file_paths: Paths to checkpoint files (e.g., checkpoints/*.pt).
+
+        Returns:
+            Tuple of (best_model, leaderboard_df).
+        """
+        checkpoint_records = self._build_checkpoint_records(eval_epoch_dirs, checkpoint_file_paths)
+        leaderboard_df = self._generate_leaderboard(checkpoint_records)
+
+        best_model = leaderboard_df.iloc[0, :].to_dict()
+
+        return best_model, leaderboard_df
+
+    @classmethod
+    def run_from_config(cls, config_path, runs_dir):
+        """Create ModelSelection from config file and run leaderboard generation."""
+        with open(config_path) as f:
+            config = json.load(f)
+
+        leaderboard_config = config['data']['leaderboard']
+        score_criteria = leaderboard_config['score_criteria']
+        experiment_name = leaderboard_config['model_checkpoint']
+
+        ms = cls(score_criteria)
+        eval_dirs, ckpt_paths = ms._collect_experiment_paths(experiment_name, runs_dir)
+        best, df = ms.run(eval_dirs, ckpt_paths)
+
+        # Save leaderboard CSV
+        csv_path = os.path.join(runs_dir, experiment_name, 'eval', 'leaderboard.csv')
+        df.to_csv(csv_path, index=False)
+        print(f"Leaderboard saved to: {csv_path}")
+
+        return best, df
+
+
+if __name__ == '__main__':
+    # Resolve relative paths
+    
+    config_path = 'leaderboard_config.json'
+    runs_dir = '/home/jingjie/DinoFT/DinoClassifier/runs'
+
+    # Run
+    best, df = ModelSelection.run_from_config(config_path, runs_dir)
+
+    # Print results
+    print("\n" + "=" * 70)
+    print("LEADERBOARD (sorted by score, higher is better)")
+    print("=" * 70)
+    print(df.to_string(index=False))
+    print("=" * 70)
+    print(f"\nBest model: {best['model_epoch']}, score: {best['score']}")
+

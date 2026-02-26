@@ -37,7 +37,7 @@ def generate_eval_structure(
         os.makedirs(checkpoint_path, exist_ok=True)
 
         # Get unique batches from the dataframe
-        unique_batches = main_df['batch'].unique()
+        unique_batches = main_df['batch_directory'].unique()
 
         for batch in unique_batches:
             # Create batch folder

@@ -5,24 +5,34 @@ from torch.utils.data import DataLoader, DistributedSampler
 from utils.device import is_main_process
 from .dataset import CSVTorchDataset
 from .transforms import get_transform
-from .preprocessing import read_data, fix_path
+from .proj_infra_preprocessing import preprocess_csv, split_data, map_path_to_source
 
 
 def create_dataloaders(cfg):
     """Build train/val dataloaders from config."""
     transform = get_transform(cfg)
 
-    # takes in the complete list of csv datasets and return a concatenated csv
-    data_csv = read_data('ori', cfg['data']['train_batches'], data_type='train',
-                         train_val_split=cfg['data']['train_val_split'], csv_image_column=None)
+    # Read and combine batch CSVs
+    main_data, missing_batches = preprocess_csv(
+        image_type='ori',
+        batch_list=cfg['data']['train_batches'],
+        training_mode=True
+    )
+    if missing_batches:
+        raise FileNotFoundError(f"Missing batches: {missing_batches}")
 
-    # separate train and validation df(s)
+    # Split into train/val
+    data_csv = split_data(main_data, train_val_split=cfg['data']['train_val_split'])
+
+    # Separate train and validation DataFrames
     df_train = data_csv[data_csv['dataset_type'] == 'train'].reset_index(drop=True)
     df_val = data_csv[data_csv['dataset_type'] == 'validation'].reset_index(drop=True)
 
-    # map the paths in the csv to their respective locations in the server
-    df_train = fix_path(df_train, 'train')
-    df_val = fix_path(df_val, 'validation')
+    # Map paths to source locations
+    df_train, missing_train = map_path_to_source(df_train, training_mode=True)
+    df_val, missing_val = map_path_to_source(df_val, training_mode=True)
+    if missing_train or missing_val:
+        raise FileNotFoundError(f"Missing paths - train: {len(missing_train)}, val: {len(missing_val)}")
 
     # Use Custom Dataset to create dataset(s)
     train_dataset = CSVTorchDataset(df_train, transform=transform)

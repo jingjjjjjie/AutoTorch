@@ -3,9 +3,9 @@ Dataloader creation and dataset summary utilities.
 '''
 from torch.utils.data import DataLoader, DistributedSampler
 from utils.device import is_main_process
-from .dataset import CSVTorchDataset
+from .dataset import IDFraudTorchDataset
 from .transforms import get_transform
-from .proj_infra_preprocessing import preprocess_csv, split_data, map_path_to_source
+from .preprocessing import preprocess_csv, split_data, map_path_to_source
 
 
 def create_dataloaders(cfg):
@@ -35,8 +35,8 @@ def create_dataloaders(cfg):
         raise FileNotFoundError(f"Missing paths - train: {len(missing_train)}, val: {len(missing_val)}")
 
     # Use Custom Dataset to create dataset(s)
-    train_dataset = CSVTorchDataset(df_train, transform=transform)
-    valid_dataset = CSVTorchDataset(df_val, transform=transform)
+    train_dataset = IDFraudTorchDataset(df_train, transform=transform)
+    valid_dataset = IDFraudTorchDataset(df_val, transform=transform)
 
     # Create samplers
     train_sampler = DistributedSampler(train_dataset, shuffle=True)

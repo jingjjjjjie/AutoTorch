@@ -18,11 +18,12 @@ class Timer:
         total = sum(self._records.values())
         return {**self._records, "total": total}
 
-    def formatted_summary(self) -> str:
+    def print_formatted_summary(self) -> str:
         """Return a human-readable string of all recorded intervals."""
-        lines = []
+        lines = ["=" * 40]
         for name, secs in self.summary().items():
             mins, s = divmod(int(secs), 60)
             hrs, mins = divmod(mins, 60)
             lines.append(f"  {name}: {hrs:02d}:{mins:02d}:{s:02d}")
-        return "\n".join(lines)
+        lines.append("=" * 40)
+        print("\n".join(lines))

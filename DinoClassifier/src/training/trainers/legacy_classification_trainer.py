@@ -21,7 +21,7 @@ def train_step(model: torch.nn.Module,
     train_loss = 0
     total_tp, total_tn, total_fp, total_fn = 0, 0, 0, 0
 
-    for batch, (X, y) in enumerate(dataloader):
+    for X, y in dataloader:
         X, y = X.to(device), y.to(device)
 
         y_pred = model(X).squeeze(dim=1)  # [batch, 1] -> [batch]
@@ -56,7 +56,7 @@ def test_step(model: torch.nn.Module,
     total_tp, total_tn, total_fp, total_fn = 0, 0, 0, 0
 
     with torch.inference_mode():
-        for batch, (X, y) in enumerate(dataloader):
+        for X, y in dataloader:
             X, y = X.to(device), y.to(device)
 
             y_pred = model(X).squeeze(dim=1)  # [batch, 1] -> [batch]
@@ -69,7 +69,7 @@ def test_step(model: torch.nn.Module,
             total_fp += fp
             total_fn += fn
 
-    # Aggregate metrics across all ranks for DDP (ensures identical values on all ranks)
+    # Aggregate metrics across all ranks for DDP
     if torch.distributed.is_initialized():
         stats = torch.tensor(
             [test_loss_sum, len(dataloader), total_tp, total_tn, total_fp, total_fn],

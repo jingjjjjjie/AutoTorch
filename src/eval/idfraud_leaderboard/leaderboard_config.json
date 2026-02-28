@@ -1,0 +1,42 @@
+{
+    "data": {
+        "fraud_type": "idrecapture",
+        "run_type": "leaderboard",
+        "model_type": "ori",
+        "leaderboard": {
+            "thres_setting": "all",
+            "model_checkpoint": "Ex2_vits16_226test",
+            "models": null,
+            "score_criteria": {
+                "weight": [
+                    {
+                        "data_source": "batch_issue_20230322_none_recapture_colorprint",
+                        "metric": "apcer",
+                        "value": -0.0769,
+                        "note": "Recapture test dataset"
+                    },
+                    {
+                        "data_source": "batch_issue_20230322_none_recapture_colorprint",
+                        "metric": "bpcer",
+                        "value": 0,
+                        "note": "Recapture test dataset"
+                    },
+                    {
+                        "data_source": "batch_issue_20240704_snt_both_colorghostwhitebg",
+                        "metric": "apcer",
+                        "value": -0.0769,
+                        "note": "Recapture test dataset"
+                    },
+                    {
+                        "data_source": "batch_issue_20240704_snt_both_colorghostwhitebg",
+                        "metric": "bpcer",
+                        "value": 0,
+                        "note": "Recapture test dataset"
+                    }
+                ],
+                "lower_as_pass": null,
+                "greater_as_pass": null
+            }
+        }
+    }
+}

@@ -3,7 +3,7 @@ Training components: loss, optimizers, callbacks, and trainers.
 '''
 from .loss import LOSS_FN_MAP
 from .optimizers import OPTIMIZER_MAP
-from .lr_scheduler import lr_scheduler
+from .lr_scheduler import LRScheduler
 
 def build_loss_fn(cfg):
     """Create loss function from config.
@@ -31,4 +31,4 @@ def build_optimizer(cfg, model):
 
 def build_lr_scheduler(cfg, optimizer):
     """Create learning rate scheduler from config."""
-    return lr_scheduler(cfg, optimizer)
+    return LRScheduler(cfg, optimizer)

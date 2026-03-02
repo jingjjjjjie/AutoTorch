@@ -13,13 +13,11 @@ def create_dataloaders(cfg):
     transform = get_transform(cfg)
 
     # Read and combine batch CSVs
-    main_data, missing_batches = preprocess_csv(
+    main_data = preprocess_csv(
         image_type='ori',
         batch_list=cfg['data']['train_batches'],
         training_mode=True
     )
-    if missing_batches:
-        raise FileNotFoundError(f"Missing batches: {missing_batches}")
 
     # Split into train/val
     data_csv = split_data(main_data, train_val_split=cfg['data']['train_val_split'])
@@ -29,10 +27,8 @@ def create_dataloaders(cfg):
     df_val = data_csv[data_csv['dataset_type'] == 'validation'].reset_index(drop=True)
 
     # Map paths to source locations
-    df_train, missing_train = map_path_to_source(df_train, training_mode=True)
-    df_val, missing_val = map_path_to_source(df_val, training_mode=True)
-    if missing_train or missing_val:
-        raise FileNotFoundError(f"Missing paths - train: {len(missing_train)}, val: {len(missing_val)}")
+    df_train = map_path_to_source(df_train, training_mode=True)
+    df_val = map_path_to_source(df_val, training_mode=True)
 
     # Use Custom Dataset to create dataset(s)
     train_dataset = IDFraudTorchDataset(df_train, transform=transform)
@@ -43,13 +39,19 @@ def create_dataloaders(cfg):
     valid_sampler = DistributedSampler(valid_dataset, shuffle=False)
 
     # Create loaders
+    num_workers = cfg['dataloader']['num_workers']
+    prefetch_factor = cfg['dataloader'].get('prefetch_factor', 2)
     train_loader = DataLoader(
         train_dataset, batch_size=cfg['training']['batch_size'],
-        sampler=train_sampler, num_workers=cfg['dataloader']['num_workers'], pin_memory=True
+        sampler=train_sampler, num_workers=num_workers, pin_memory=True,
+        persistent_workers=num_workers > 0,
+        prefetch_factor=prefetch_factor if num_workers > 0 else None
     )
     valid_loader = DataLoader(
         valid_dataset, batch_size=cfg['training']['batch_size'],
-        sampler=valid_sampler, num_workers=cfg['dataloader']['num_workers'], pin_memory=True
+        sampler=valid_sampler, num_workers=num_workers, pin_memory=True,
+        persistent_workers=num_workers > 0,
+        prefetch_factor=prefetch_factor if num_workers > 0 else None
     )
 
     if is_main_process():

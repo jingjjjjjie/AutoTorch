@@ -66,16 +66,23 @@ class BaseTrainer(ABC):
         self.model.train()
         self.metrics_handler.reset_and_initialize()
         loss_sum = 0.0
+        total_batches = len(dataloader)
 
-        for batch in dataloader:
-            y_pred, y_true, loss = self.forward_step(batch)  # subclass handles this
+        for batch_idx, batch in enumerate(dataloader):
+            y_pred, y_true, loss = self.forward_step(batch)
 
-            self.optimizer.zero_grad()  # clear gradients
-            loss.backward()             # compute gradients
-            self.optimizer.step()       # update weights
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
 
             loss_sum += loss.item()
             self.metrics_handler.update_counts_from_preds(y_pred, y_true)
+
+            if is_main_process():
+                print(f"\r  Batch {batch_idx + 1}/{total_batches} | Loss: {loss.item():.4f}", end="", flush=True)
+
+        if is_main_process():
+            print()
 
         results = {"loss": loss_sum / len(dataloader)}
         results.update(self.metrics_handler.compute_metrics())
@@ -117,7 +124,7 @@ class BaseTrainer(ABC):
             test_results_dict = self._eval_step(test_dataloader)
 
             if self.scheduler:
-                self.scheduler.step()
+                self.scheduler.step(test_results_dict["loss"])
 
             # Track Learning Rate
             current_lr = self.optimizer.param_groups[0]['lr']

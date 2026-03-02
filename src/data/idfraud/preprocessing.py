@@ -22,10 +22,10 @@ def map_path_to_source(df, source_path=MNT3PATH, training_mode=True):
           and shows a tqdm progress bar only on the main process. Defaults to True
 
     Returns:
-        tuple[pd.DataFrame, list[str]]:
-        - df: DataFrame with resolved absolute paths in the 'path' column.
-            Entries are set to None if the file cannot be found.
-        - missing_paths: List of relative paths that could not be resolved.
+        pd.DataFrame: DataFrame with resolved absolute paths in the 'path' column.
+
+    Raises:
+        FileNotFoundError: If any image paths could not be resolved in the source directory.
     """
     missing_paths = []
 
@@ -39,11 +39,14 @@ def map_path_to_source(df, source_path=MNT3PATH, training_mode=True):
 
     # if training mode is set, check if is main process of DDP, show progress if yes. Show tqdm progress in eval
     show_progress = not training_mode or is_main_process()
-    
+
     tqdm.pandas(desc="Mapping paths")
     df['path'] = df['path'].progress_apply(map) if show_progress else df['path'].apply(map)
 
-    return df, missing_paths
+    if missing_paths:
+        raise FileNotFoundError(f"Missing paths: {missing_paths}")
+
+    return df
 
 
 def preprocess_csv(image_type, batch_list, training_mode=True):
@@ -55,17 +58,16 @@ def preprocess_csv(image_type, batch_list, training_mode=True):
         training_mode: If True, assumes DDP and shows tqdm progress only on rank 0. Defaults to True.
 
     Returns:
-        tuple[pd.DataFrame, list[str]]:
-        - main_data: Combined DataFrame with 'path', 'label', 'batch_directory', and 'filename' columns.
-        - missing_batches: List of batch CSV paths that could not be found in the source directory.
+        pd.DataFrame: Combined DataFrame with 'path', 'label', 'batch_directory', and 'filename' columns.
 
     Raises:
         Exception: If batch_list is empty or contains duplicate entries.
         ValueError: If image_type is not one of 'ori', 'crop', or 'corner'.
+        FileNotFoundError: If any batch CSV paths could not be found in the source directory.
     """
 
     def check_duplicate_or_empty(batch_list):
-        """Validates that the batch list is non-empty and contains no duplicates.
+        """Validates that the batch list (from the config) is non-empty and contains no duplicates.
 
         Args:
             batch_list: List of batch CSV paths from the config.
@@ -108,11 +110,13 @@ def preprocess_csv(image_type, batch_list, training_mode=True):
             else:  # if the csv is not found in the source directory
                 missing_batches.append(batch)
 
+        if missing_batches:
+            raise FileNotFoundError(f"Missing batches: {missing_batches}")
         main_data = pd.concat(batch_datas, ignore_index=True)
 
         # map the labels: genuine = class 0, fraud = class 1
         main_data['label'] = main_data['fraud_type'].apply(lambda x: 0 if x == 'genuine' else 1)
-
+        
         return main_data, missing_batches
 
     # if training mode is set, check if is main process of DDP, show progress if yes. Show tqdm progress in eval
@@ -120,7 +124,7 @@ def preprocess_csv(image_type, batch_list, training_mode=True):
     check_duplicate_or_empty(batch_list)
     main_data, missing_batches = combine_batch(image_type, batch_list)
 
-    return main_data, missing_batches
+    return main_data
 
 
 def split_data(main_data, train_val_split=0.9, csv_label_column='label', random_state=42):

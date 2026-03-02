@@ -3,15 +3,14 @@ Model architectures and builders.
 '''
 import torch
 from .dino import load_dino_model
-from .head import classification_head
+from .head import build_head
 from .classifier import CustomClassifierModel
 
 def build_classifier_model(cfg, device, backbone_model):
     """Assemble backbone + head into a full model."""
-    backbone = backbone_model
-    head = classification_head(cfg)
+    head = build_head(cfg)
     return CustomClassifierModel(
-        backbone=backbone,
+        backbone=backbone_model,
         head=head,
         freeze_backbone=cfg['model']['freeze_backbone'],
     ).to(device)

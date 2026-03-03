@@ -111,7 +111,10 @@ def preprocess_csv(image_type, batch_list, training_mode=True):
                 missing_batches.append(batch)
 
         if missing_batches:
-            raise FileNotFoundError(f"Missing batches: {missing_batches}")
+            missing_file = 'missing_batches.txt'
+            with open(missing_file, 'w') as f:
+                f.write('\n'.join(missing_batches))
+            raise FileNotFoundError(f"Missing {len(missing_batches)} batches. Saved to {missing_file}")
         main_data = pd.concat(batch_datas, ignore_index=True)
 
         # map the labels: genuine = class 0, fraud = class 1

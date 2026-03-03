@@ -14,7 +14,7 @@ def create_dataloaders(cfg):
 
     # Read and combine batch CSVs
     main_data = preprocess_csv(
-        image_type='ori',
+        image_type=cfg['data']['image_type'],
         batch_list=cfg['data']['train_batches'],
         training_mode=True
     )

@@ -2,8 +2,8 @@
 Model architectures and builders.
 '''
 import torch
-from .dino import load_dino_model
 from .head import build_head
+from .dino import load_dino_model
 from .classifier import CustomClassifierModel
 
 def build_classifier_model(cfg, device, backbone_model):

@@ -28,5 +28,12 @@ def load_dino_model(cfg) -> nn.Module:
         raise ValueError(f"Unknown model: {model_name}. Available: {list(WEIGHTS_MAP.keys())}")
 
     weights_path = WEIGHTS_MAP[model_name]
-    model = torch.hub.load(REPO_DIR, model_name, source='local', weights=weights_path)
+    
+    # Load model architecture without pretrained weights
+    model = torch.hub.load(REPO_DIR, model_name, source='local', pretrained=False)
+    
+    # Load weights from local file
+    state_dict = torch.load(weights_path)
+    model.load_state_dict(state_dict)
+    
     return model

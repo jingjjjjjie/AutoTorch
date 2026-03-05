@@ -6,7 +6,7 @@ from utils.timer import Timer
 from utils.config import get_config
 from data.idfraud import create_dataloaders
 from models import load_dino_model, build_classifier_model
-from postprocess import save_pre_training, save_post_training
+from postprocess import save_pre_training, save_post_training, save_epoch
 from utils.device import setup_ddp, cleanup_ddp, is_main_process, wrap_model_ddp
 from training.callbacks import build_checkpoint, build_early_stopping
 from training import build_loss_fn, build_optimizer, build_lr_scheduler
@@ -57,6 +57,7 @@ def main():
         sampler=train_sampler,
         early_stopping=early_stopping,
         checkpoint=checkpoint,
+        on_epoch_end=lambda history: save_epoch(cfg, history),
     )
     results = trainer.train(train_loader, valid_loader, epochs=cfg['training']['epochs'])
     timer.record("training")

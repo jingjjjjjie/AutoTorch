@@ -13,7 +13,8 @@ class BaseTrainer(ABC):
       Subclass and implement forward_step() for your task."""
 
     def __init__(self, model, loss_fn, optimizer, metrics_handler, device,
-                scheduler=None, sampler=None, early_stopping=None, checkpoint=None):
+                scheduler=None, sampler=None, early_stopping=None, checkpoint=None,
+                on_epoch_end=None):
 
         self.model = model
         self.loss_fn = loss_fn
@@ -24,6 +25,7 @@ class BaseTrainer(ABC):
         self.sampler = sampler
         self.early_stopping = early_stopping
         self.checkpoint = checkpoint
+        self.on_epoch_end = on_epoch_end  # callback(history) called after each epoch
 
     @abstractmethod
     def forward_step(self, batch) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -156,6 +158,10 @@ class BaseTrainer(ABC):
                     if is_main_process():
                         print(f"Early stopping at epoch {epoch + 1}")
                     break
+
+            # Per-epoch callback (e.g., save logs/plots)
+            if self.on_epoch_end is not None:
+                self.on_epoch_end(history)
 
         return history
 

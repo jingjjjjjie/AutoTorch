@@ -33,6 +33,24 @@ def save_pre_training(cfg, df_train, df_val):
     print(f"[INFO] Saved config and data splits to: {run_dir}")
 
 
+def save_epoch(cfg, results):
+    """Save logs and plots at the end of each epoch. Only runs on main process."""
+    if not is_main_process():
+        return
+
+    run_name = cfg['model']['save_name'].replace('.pth', '')
+    run_dir = os.path.join(cfg['model']['save_dir'], run_name)
+    plots_dir = os.path.join(run_dir, 'plots')
+
+    os.makedirs(plots_dir, exist_ok=True)
+
+    # Save training logs
+    pd.DataFrame(results).to_csv(os.path.join(run_dir, 'log.csv'), index_label='epoch')
+
+    # Plot training results
+    plot_results(results, save_dir=plots_dir)
+
+
 def save_post_training(cfg, results, model, timer=None):
     """Save training results after training. Only runs on main process."""
     if not is_main_process():

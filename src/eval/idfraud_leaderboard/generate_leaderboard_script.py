@@ -10,7 +10,7 @@ import pandas as pd
 from typing import Dict, Tuple
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from idfraud.calculate import calculate_metrics
+from src.eval.idfraud.calculate import calculate_metrics
 
 
 # Dataset classification rules based on naming patterns

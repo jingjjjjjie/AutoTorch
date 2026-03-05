@@ -6,9 +6,9 @@ from .head import build_head
 from .dino import load_dino_model
 from .classifier import CustomClassifierModel
 
-def build_classifier_model(cfg, device, backbone_model):
+def build_classifier_model(cfg, device, backbone_model, input_dim: int):
     """Assemble backbone + head into a full model."""
-    head = build_head(cfg)
+    head = build_head(cfg, input_dim)
     return CustomClassifierModel(
         backbone=backbone_model,
         head=head,

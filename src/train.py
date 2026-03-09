@@ -28,8 +28,8 @@ def main():
     timer.record("data_processing")
 
     # Build model and wrap with DDP
-    backbone = load_dino_model(cfg)
-    model = build_classifier_model(cfg, device=local_rank, backbone_model=backbone)
+    backbone, backbone_dim = load_dino_model(cfg)
+    model = build_classifier_model(cfg, device=local_rank, backbone_model=backbone, input_dim=backbone_dim)
     model = wrap_model_ddp(model, local_rank)
 
     # Build loss function, optimizer, and scheduler

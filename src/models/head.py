@@ -64,12 +64,11 @@ HEAD_MAP = {
 
 
 
-def build_head(cfg):
+def build_head(cfg, input_dim: int):
     """Create classification head from config."""
     head_type = cfg['model'].get('head_type', 'v1')
-    hidden = cfg['model']['hidden_units']
 
     if head_type not in HEAD_MAP:
         raise ValueError(f"Unknown head_type '{head_type}'. Available: {list(HEAD_MAP.keys())}")
 
-    return HEAD_MAP[head_type](hidden)
+    return HEAD_MAP[head_type](input_dim)

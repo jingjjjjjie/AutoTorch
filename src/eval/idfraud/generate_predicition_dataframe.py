@@ -74,14 +74,14 @@ def run_evaluation(cfg, checkpoint_folder, output_path, batch_list=None, num_wor
 
     # Load backbone once
     print("Loading backbone...")
-    backbone = load_dino_model(cfg)
+    backbone, backbone_dim = load_dino_model(cfg)
 
     df = df.copy()
 
     # Run inference for each checkpoint
     for epoch_num, ckpt_path in checkpoints:
         print(f"\nEvaluating checkpoint epoch_{epoch_num}...")
-        model = build_classifier_model(cfg, device, backbone)
+        model = build_classifier_model(cfg, device, backbone, backbone_dim)
         model = load_weights_from_checkpoint(model, ckpt_path, device)
         model.eval()
 

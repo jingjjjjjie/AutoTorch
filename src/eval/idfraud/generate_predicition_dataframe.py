@@ -14,6 +14,7 @@ from data.idfraud.transforms import get_transform
 from data.idfraud.dataset import IDFraudTorchDataset
 from models import build_classifier_model, load_weights_from_checkpoint
 from models.dino import load_dino_model
+from eval.idfraud.calculate import calculate_metrics, print_metrics
 
 
 def find_checkpoints(checkpoint_folder):
@@ -29,11 +30,12 @@ def find_checkpoints(checkpoint_folder):
 
 
 def run_evaluation(cfg, checkpoint_folder, output_path, batch_list=None, num_workers=4, pin_memory=True,
-                   device='cuda', image_type='crop', batch_size=32, prefetch_factor=4):
+                   device='cuda', image_type='crop', batch_size=32, prefetch_factor=4, epochs=None):
     """
-    Run inference on batches using all checkpoints in folder.
+    Run inference on batches using checkpoints in folder.
 
     batch_list: if None, reads from cfg['eval_batches'].
+    epochs: list of epoch numbers to evaluate, e.g. [1, 2] or [5]. If None, evaluates all.
     Returns DataFrame with pred_prob_ckpt{x} columns for each checkpoint.
     """
     if batch_list is None:
@@ -43,6 +45,12 @@ def run_evaluation(cfg, checkpoint_folder, output_path, batch_list=None, num_wor
     checkpoints = find_checkpoints(checkpoint_folder)
     if not checkpoints:
         raise ValueError(f"No epoch_x.pt files found in {checkpoint_folder}")
+
+    # Filter to specific epochs if requested
+    if epochs is not None:
+        checkpoints = [(e, p) for e, p in checkpoints if e in epochs]
+        if not checkpoints:
+            raise ValueError(f"No checkpoints found for epochs {epochs}")
     print(f"Found {len(checkpoints)} checkpoints: {[c[0] for c in checkpoints]}")
 
     # Preprocess data
@@ -62,7 +70,7 @@ def run_evaluation(cfg, checkpoint_folder, output_path, batch_list=None, num_wor
         persistent_workers=num_workers > 0,
         prefetch_factor=prefetch_factor if num_workers > 0 else None
     )
-    
+
 
     # Load backbone once
     print("Loading backbone...")
@@ -83,24 +91,29 @@ def run_evaluation(cfg, checkpoint_folder, output_path, batch_list=None, num_wor
                 logits = model(X.to(device)).squeeze(1)
                 all_probs.extend(torch.sigmoid(logits).cpu().tolist())
 
-        df[f'pred_prob_ckpt{epoch_num}'] = all_probs
+        col = f'pred_prob_ckpt{epoch_num}'
+        df[col] = all_probs
 
-    # Save
-    if os.path.dirname(output_path):
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    df.to_csv(output_path, index=False)
-    print(f"\nSaved: {output_path}")
+        # Save after each checkpoint
+        if os.path.dirname(output_path):
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        df.to_csv(output_path, index=False)
+        print(f"Saved: {output_path}")
+
+        # Print metrics
+        print(f"Epoch {epoch_num} metrics:")
+        print_metrics(calculate_metrics(df, prob_col=col))
 
     return df
 
 
 if __name__ == "__main__":
-    
+
     RUNS_DIR      = "/home/jingjie/AutoTorch/runs"
-    
+
     # change this two each eval
-    EXP_NAME      = "Exp1_dino3vits16_v1_512_cropped"
-    EVAL_CONFIG   = "/home/jingjie/AutoTorch/configs/eval_crop_dataset_21v1.yaml"
+    EXP_NAME      = "Exp2_dinov3_convnext_large_v1_512_ori"
+    EVAL_CONFIG   = "/home/jingjie/AutoTorch/configs/eval_ori_dataset_21v1.yaml"
 
     exp_dir = os.path.join(RUNS_DIR, EXP_NAME)
 
@@ -114,12 +127,11 @@ if __name__ == "__main__":
         cfg=cfg,
         checkpoint_folder=os.path.join(exp_dir, "checkpoints"),
         batch_list=eval_cfg['eval_batches'],
-        output_path=os.path.join(exp_dir, "predictions.csv"),
-        batch_size=40,
-        num_workers=24,
+        output_path=os.path.join(exp_dir, "predictions_full.csv"),
+        batch_size=40, # best was 40
+        num_workers=24, # best was 24
         pin_memory=True,
-        prefetch_factor=10,
+        prefetch_factor=10, # best was 10
         image_type=eval_cfg['image_type'],
-        device='cuda:2',
+        device='cuda:0',
     )
-   

@@ -1,6 +1,6 @@
 '''
 Description: Data utilities for loading and preprocessing training batches
-** currently checks mnt3 only 
+** currently checks mnt3 only
 '''
 import sys
 import os
@@ -104,6 +104,7 @@ def preprocess_csv(image_type, batch_list, training_mode=True):
                 else:
                     raise ValueError(f"Unsupported image_type '{image_type}'. Supported types: 'crop', 'corner', 'ori'.")
 
+                batch_data['original_batch_name'] = batch  # original batch path from config
                 batch_data['batch_directory'] = batch_dir  # the name of the batch (directory name)
                 batch_data['filename'] = batch_data['path'].apply(os.path.basename)  # the image file name
                 batch_datas.append(batch_data)
@@ -119,7 +120,7 @@ def preprocess_csv(image_type, batch_list, training_mode=True):
 
         # map the labels: genuine = class 0, fraud = class 1
         main_data['label'] = main_data['fraud_type'].apply(lambda x: 0 if x == 'genuine' else 1)
-        
+
         return main_data, missing_batches
 
     # if training mode is set, check if is main process of DDP, show progress if yes. Show tqdm progress in eval

@@ -1,17 +1,8 @@
-'''
-Configuration utilities for loading YAML config files.
-Provides functions to load training configs from the configs directory.
-'''
-import yaml
-from pathlib import Path
+from omegaconf import OmegaConf
+from src import CONFIG_DIR
 
-config_dir = Path(__file__).parent.parent.parent / "configs"
-
-def load_config(config_path: str) -> dict:
-    """Load YAML config file and return as dictionary."""
-    with open(config_path, 'r') as f:
-        return yaml.safe_load(f)
-
-def get_config(config_name: str = "train_config.yaml", config_dir=config_dir) -> dict:
-    """Load config from the configs directory."""
-    return load_config(config_dir / config_name)
+def get_config(name: str = "train_config.yaml"):
+    cfg = OmegaConf.load(CONFIG_DIR / name)
+    # Add computed values
+    cfg.run_dir = f"{cfg.experiment.save_dir}/{cfg.experiment.save_name}"
+    return cfg

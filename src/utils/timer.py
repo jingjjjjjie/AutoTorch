@@ -14,16 +14,8 @@ class Timer:
         self._last = now
 
     def summary(self) -> dict:
-        """Return all recorded intervals plus the total."""
+        """Return all recorded intervals plus the total (rounded to 2 decimal places)."""
         total = sum(self._records.values())
-        return {**self._records, "total": total}
-
-    def print_formatted_summary(self) -> str:
-        """Return a human-readable string of all recorded intervals."""
-        lines = ["=" * 40]
-        for name, secs in self.summary().items():
-            mins, s = divmod(int(secs), 60)
-            hrs, mins = divmod(mins, 60)
-            lines.append(f"  {name}: {hrs:02d}:{mins:02d}:{s:02d}")
-        lines.append("=" * 40)
-        print("\n".join(lines))
+        result = {k: round(v, 2) for k, v in self._records.items()}
+        result["total"] = round(total, 2)
+        return result

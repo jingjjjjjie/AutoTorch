@@ -2,11 +2,10 @@ import sys
 import torch
 import torch.nn as nn
 
-sys.path.insert(0, '/mnt3/repo_and_weights/repo/dinov3')
-
 REPO_DIR = '/mnt3/repo_and_weights/repo/dinov3'
-
 WEIGHTS_DIR = '/mnt3/repo_and_weights/weights'
+
+sys.path.insert(0, REPO_DIR)
 
 WEIGHTS_MAP = {
     "dinov3_vits16": f"{WEIGHTS_DIR}/dinov3_vits16_pretrain_lvd1689m-08c60483.pth",
@@ -33,14 +32,12 @@ OUTPUT_DIM = {
     "dinov3_convnext_large": 1536,
 }
 
-def load_dino_model(cfg) -> tuple[nn.Module, int]:
+def load_dino_model(model_name: str) -> tuple[nn.Module, int]:
     """Load a DiNOv3 model with pretrained weights.
 
     Returns:
         (model, output_dim) tuple
     """
-    model_name = cfg['model']['backbone_name']
-
     if model_name not in WEIGHTS_MAP:
         raise ValueError(f"Unknown model: {model_name}. Available: {list(WEIGHTS_MAP.keys())}")
 

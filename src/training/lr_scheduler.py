@@ -56,7 +56,7 @@ class LRScheduler:
         elif decay_type == 'cosine':
             # implements a cosine annealing schedule that gradually reduces the learning rate from an 
             # initial value to a minimum value following a cosine curve
-            t_max = total_epochs - warmup_epochs
+            t_max = max(1, total_epochs - warmup_epochs) # guard, TODO: REVISIT
             schedulers.append(CosineAnnealingLR(optimizer, T_max=t_max, eta_min=eta_min))
 
         elif decay_type == 'plateau':

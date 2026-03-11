@@ -11,8 +11,9 @@ from tqdm import tqdm
 from utils.device import is_main_process
 
 MNT3PATH = '/mnt3/auto-ekyc/idrecapture/datasets'
+MNT4PATH = '/mnt4/auto-ekyc/idrecapture/datasets'
 
-def map_path_to_source(df, source_path=MNT3PATH, training_mode=True):
+def map_path_to_source(df, source_path=MNT4PATH, training_mode=True):
     """Resolves image paths in the dataframe to their absolute locations.
 
     Args:
@@ -53,7 +54,7 @@ def preprocess_csv(image_type, batch_list, training_mode=True):
     """Reads and combines batch CSVs into a single DataFrame.
 
     Args:
-        image_type: Image column to use for path resolution. One of 'ori', 'crop', or 'corner'.
+        image_type: Image column to use for path resolution. One of 'ori' or 'crop'.
         batch_list: List of relative batch CSV paths from the config.
         training_mode: If True, assumes DDP and shows tqdm progress only on rank 0. Defaults to True.
 
@@ -66,7 +67,7 @@ def preprocess_csv(image_type, batch_list, training_mode=True):
         FileNotFoundError: If any batch CSV paths could not be found in the source directory.
     """
 
-    def check_duplicate_or_empty(batch_list):
+    def _check_duplicate_or_empty(batch_list):
         """Validates that the batch list (from the config) is non-empty and contains no duplicates.
 
         Args:
@@ -80,7 +81,7 @@ def preprocess_csv(image_type, batch_list, training_mode=True):
         if len(batch_list) != len(set(batch_list)):
             raise Exception("Error in preprocess_csv - Duplicate batches inside config file.")
 
-    def combine_batch(image_type, batch_list):
+    def _combine_batch(image_type, batch_list):
         """Reads each batch CSV and concatenates them into one DataFrame."""
         missing_batches = []
         batch_datas = []
@@ -97,12 +98,10 @@ def preprocess_csv(image_type, batch_list, training_mode=True):
                 # resolves paths, create a path column, and map image type to the correct path column
                 if image_type == 'crop':
                     batch_data['path'] = batch_data.apply(lambda x: os.path.join(batch_dir, x['ocr_path']), axis=1)
-                elif image_type == 'corner':
-                    batch_data['path'] = batch_data.apply(lambda x: os.path.join(batch_dir, x['corner_path']), axis=1)
                 elif image_type == 'ori':
                     batch_data['path'] = batch_data.apply(lambda x: os.path.join(batch_dir, x['ori_path']), axis=1)
                 else:
-                    raise ValueError(f"Unsupported image_type '{image_type}'. Supported types: 'crop', 'corner', 'ori'.")
+                    raise ValueError(f"Unsupported image_type '{image_type}'. Supported types: 'crop', 'ori'.")
 
                 batch_data['original_batch_name'] = batch  # original batch path from config
                 batch_data['batch_directory'] = batch_dir  # the name of the batch (directory name)
@@ -125,8 +124,8 @@ def preprocess_csv(image_type, batch_list, training_mode=True):
 
     # if training mode is set, check if is main process of DDP, show progress if yes. Show tqdm progress in eval
     show_progress = not training_mode or is_main_process()
-    check_duplicate_or_empty(batch_list)
-    main_data, missing_batches = combine_batch(image_type, batch_list)
+    _check_duplicate_or_empty(batch_list)
+    main_data = _combine_batch(image_type, batch_list)
 
     return main_data
 

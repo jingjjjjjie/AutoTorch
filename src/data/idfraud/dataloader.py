@@ -8,19 +8,19 @@ from .transforms import get_transform
 from .preprocessing import preprocess_csv, split_data, map_path_to_source
 
 
-def create_dataloaders(cfg):
-    """Build train/val dataloaders from config."""
-    transform = get_transform(cfg)
+def create_dataloaders(image_type, train_batches, train_val_split, batch_size, num_workers, prefetch_factor, transform_cfg):
+    """Build train/val dataloaders."""
+    transform = get_transform(transform_cfg)
 
     # Read and combine batch CSVs
     main_data = preprocess_csv(
-        image_type=cfg['data']['image_type'],
-        batch_list=cfg['data']['train_batches'],
+        image_type=image_type,
+        batch_list=train_batches,
         training_mode=True
     )
 
     # Split into train/val
-    data_csv = split_data(main_data, train_val_split=cfg['data']['train_val_split'])
+    data_csv = split_data(main_data, train_val_split=train_val_split)
 
     # Separate train and validation DataFrames
     df_train = data_csv[data_csv['dataset_type'] == 'train'].reset_index(drop=True)
@@ -39,28 +39,26 @@ def create_dataloaders(cfg):
     valid_sampler = DistributedSampler(valid_dataset, shuffle=False)
 
     # Create loaders
-    num_workers = cfg['dataloader']['num_workers']
-    prefetch_factor = cfg['dataloader'].get('prefetch_factor', 2)
     train_loader = DataLoader(
-        train_dataset, batch_size=cfg['training']['batch_size'],
+        train_dataset, batch_size=batch_size,
         sampler=train_sampler, num_workers=num_workers, pin_memory=True,
         persistent_workers=num_workers > 0,
         prefetch_factor=prefetch_factor if num_workers > 0 else None
     )
     valid_loader = DataLoader(
-        valid_dataset, batch_size=cfg['training']['batch_size'],
+        valid_dataset, batch_size=batch_size,
         sampler=valid_sampler, num_workers=num_workers, pin_memory=True,
         persistent_workers=num_workers > 0,
         prefetch_factor=prefetch_factor if num_workers > 0 else None
     )
 
     if is_main_process():
-        print_dataset_summary(train_dataset, valid_dataset)
+        _print_dataset_summary(train_dataset, valid_dataset)
 
     return train_loader, valid_loader, train_sampler, df_train, df_val
 
 
-def print_dataset_summary(train_dataset, valid_dataset):
+def _print_dataset_summary(train_dataset, valid_dataset):
     """Print dataset size and label distribution."""
     print(f"\n{'='*40}")
     print("Dataset Summary")

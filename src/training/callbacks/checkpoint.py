@@ -4,8 +4,8 @@ import torch
 class Checkpoint:
     """Saves model and optimizer state at the end of each epoch."""
 
-    def __init__(self, save_dir, save_name):
-        self.ckpt_dir = os.path.join(save_dir, save_name.replace('.pth', ''), 'checkpoints')
+    def __init__(self, save_dir: str):
+        self.ckpt_dir = os.path.join(save_dir, 'checkpoints')
         os.makedirs(self.ckpt_dir, exist_ok=True)
 
     def save(self, model, optimizer, epoch, val_loss):

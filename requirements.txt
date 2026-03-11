@@ -13,3 +13,4 @@ pandas
 torch
 torchinfo
 tqdm
+omegaconf

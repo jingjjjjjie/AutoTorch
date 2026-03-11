@@ -6,17 +6,16 @@ import yaml
 import torch
 import pandas as pd
 from pathlib import Path
+from omegaconf import OmegaConf
 from utils.device import is_main_process
 from .plots import plot_results
 
 
-def save_pre_training(cfg, df_train, df_val):
+def save_pre_training(cfg, run_dir: str, df_train, df_val):
     """Save config and data splits before training. Only runs on main process."""
     if not is_main_process():
         return
 
-    run_name = cfg['model']['save_name'].replace('.pth', '')
-    run_dir = os.path.join(cfg['model']['save_dir'], run_name)
     dataframe_dir = os.path.join(run_dir, 'dataframes')
 
     os.makedirs(run_dir, exist_ok=True)
@@ -24,7 +23,7 @@ def save_pre_training(cfg, df_train, df_val):
 
     # Save config
     with open(os.path.join(run_dir, 'config.yaml'), 'w') as f:
-        yaml.dump(cfg, f)
+        f.write(OmegaConf.to_yaml(cfg))
 
     # Save data splits
     df_train.to_csv(os.path.join(dataframe_dir, 'train_data.csv'), index=False)
@@ -33,15 +32,12 @@ def save_pre_training(cfg, df_train, df_val):
     print(f"[INFO] Saved config and data splits to: {run_dir}")
 
 
-def save_epoch(cfg, results):
+def save_epoch(run_dir: str, results):
     """Save logs and plots at the end of each epoch. Only runs on main process."""
     if not is_main_process():
         return
 
-    run_name = cfg['model']['save_name'].replace('.pth', '')
-    run_dir = os.path.join(cfg['model']['save_dir'], run_name)
     plots_dir = os.path.join(run_dir, 'plots')
-
     os.makedirs(plots_dir, exist_ok=True)
 
     # Save training logs
@@ -51,15 +47,12 @@ def save_epoch(cfg, results):
     plot_results(results, save_dir=plots_dir)
 
 
-def save_post_training(cfg, results, model, timer=None):
+def save_post_training(run_dir: str, results, model, model_name: str, timer=None):
     """Save training results after training. Only runs on main process."""
     if not is_main_process():
         return
 
-    run_name = cfg['model']['save_name'].replace('.pth', '')
-    run_dir = os.path.join(cfg['model']['save_dir'], run_name)
     plots_dir = os.path.join(run_dir, 'plots')
-
     os.makedirs(plots_dir, exist_ok=True)
 
     # Update config with timing if available
@@ -78,7 +71,7 @@ def save_post_training(cfg, results, model, timer=None):
     plot_results(results, save_dir=plots_dir)
 
     # Save model (unwrap DDP with .module)
-    save_model(model=model.module, target_dir=run_dir, model_name=cfg['model']['save_name'])
+    save_model(model=model.module, target_dir=run_dir, model_name=f"{model_name}.pt")
 
 
 def save_model(model, target_dir, model_name):

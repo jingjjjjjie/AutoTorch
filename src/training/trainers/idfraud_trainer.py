@@ -26,8 +26,9 @@ def train_step(model: torch.nn.Module,
     # initial values to be recorded
     train_loss = 0
     total_tp, total_tn, total_fp, total_fn = 0, 0, 0, 0
+    num_batches = len(dataloader)
 
-    for X, y in dataloader:
+    for batch_idx, (X, y) in enumerate(dataloader):
         X, y = X.to(device, non_blocking=non_blocking), \
                y.to(device, non_blocking=non_blocking)
 
@@ -45,7 +46,12 @@ def train_step(model: torch.nn.Module,
         total_fp += fp
         total_fn += fn
 
-    train_loss = train_loss / len(dataloader)
+        if is_main_process():
+            print(f"\rTrain: {batch_idx+1}/{num_batches}", end="", flush=True)
+
+    if is_main_process():
+        print()  # newline after progress
+    train_loss = train_loss / num_batches
     acc, apcer, bpcer = compute_binary_metrics(total_tp, total_tn, total_fp, total_fn)
     return train_loss, acc, apcer, bpcer
 
@@ -64,9 +70,10 @@ def val_step(model: torch.nn.Module,
     model.eval()
     val_loss_sum = 0
     total_tp, total_tn, total_fp, total_fn = 0, 0, 0, 0
+    num_batches = len(dataloader)
 
     with torch.inference_mode():
-        for X, y in dataloader:
+        for batch_idx, (X, y) in enumerate(dataloader):
             X, y = X.to(device, non_blocking=non_blocking), \
                    y.to(device, non_blocking=non_blocking)
 
@@ -79,6 +86,12 @@ def val_step(model: torch.nn.Module,
             total_tn += tn
             total_fp += fp
             total_fn += fn
+
+            if is_main_process():
+                print(f"\rVal: {batch_idx+1}/{num_batches}", end="", flush=True)
+
+    if is_main_process():
+        print()  # newline after progress
 
     # Aggregate metrics across all ranks for DDP
     if torch.distributed.is_initialized():
@@ -141,7 +154,7 @@ def train(model: torch.nn.Module,
         )
 
         if scheduler:
-            scheduler.step()
+            scheduler.step(metric=val_loss)
 
         # Track current learning rate
         current_lr = optimizer.param_groups[0]['lr']

@@ -13,7 +13,6 @@ from torch.optim.lr_scheduler import (
     LambdaLR,
     StepLR,
     CosineAnnealingLR,
-    SequentialLR,
     ReduceLROnPlateau
 )
 
@@ -22,57 +21,58 @@ class LRScheduler:
     """Unified learning rate scheduler with warmup support."""
 
     def __init__(self, cfg, optimizer):
-        self._scheduler = self._build(cfg, optimizer)
-        self._is_plateau = isinstance(self._scheduler, ReduceLROnPlateau)
+        self._warmup_epochs = cfg.scheduler.get('warmup_epochs', 0)
+        self._warmup_scheduler = None
+        self._decay_scheduler = None
+        self._is_plateau = False
+        self._current_epoch = 0
+
+        self._build(cfg, optimizer)
 
     def _build(self, cfg, optimizer):
         """Build the underlying PyTorch scheduler."""
-        warmup_epochs = cfg.scheduler.get('warmup_epochs', 0)
         decay_type = cfg.scheduler.get('decay_type', None)
         total_epochs = cfg.training.epochs
 
-        schedulers = []
-        milestones = []
-
         # Warmup scheduler
-        if warmup_epochs > 0:
+        if self._warmup_epochs > 0:
             def lr_lambda(epoch):
-                return min(1.0, (epoch + 1) / warmup_epochs)
-            schedulers.append(LambdaLR(optimizer, lr_lambda))
-            milestones.append(warmup_epochs)
+                return min(1.0, (epoch + 1) / self._warmup_epochs)
+            self._warmup_scheduler = LambdaLR(optimizer, lr_lambda)
 
-        # Decay scheduler - only read params needed for each type
+        # Decay scheduler
         if decay_type == 'step':
             step_size = cfg.scheduler.step_size
             gamma = cfg.scheduler.get('gamma', 0.1)
             if step_size > 0:
-                schedulers.append(StepLR(optimizer, step_size=step_size, gamma=gamma))
+                self._decay_scheduler = StepLR(optimizer, step_size=step_size, gamma=gamma)
 
         elif decay_type == 'cosine':
             eta_min = cfg.scheduler.get('eta_min', 1e-7)
-            t_max = max(1, total_epochs - warmup_epochs)
-            schedulers.append(CosineAnnealingLR(optimizer, T_max=t_max, eta_min=eta_min))
+            t_max = max(1, total_epochs - self._warmup_epochs)
+            self._decay_scheduler = CosineAnnealingLR(optimizer, T_max=t_max, eta_min=eta_min)
 
         elif decay_type == 'plateau':
             patience = cfg.scheduler.get('patience', 10)
             factor = cfg.scheduler.get('factor', 0.1)
             min_lr = cfg.scheduler.get('min_lr', 1e-6)
-            return ReduceLROnPlateau(optimizer, mode='min', factor=factor,
-                                     patience=patience, min_lr=min_lr, verbose=True)
-
-        # Return appropriate scheduler
-        if len(schedulers) == 0:
-            return None
-        elif len(schedulers) == 1:
-            return schedulers[0]
-        else:
-            return SequentialLR(optimizer, schedulers, milestones)
+            threshold = cfg.scheduler.get('min_delta', 1e-4)
+            self._decay_scheduler = ReduceLROnPlateau(
+                optimizer, mode='min', factor=factor,
+                patience=patience, min_lr=min_lr, threshold=threshold
+            )
+            self._is_plateau = True
 
     def step(self, metric=None):
         """Step the scheduler. Metric is only used for plateau mode."""
-        if self._scheduler is None:
-            return
-        if self._is_plateau:
-            self._scheduler.step(metric)
+        if self._current_epoch < self._warmup_epochs:
+            if self._warmup_scheduler is not None:
+                self._warmup_scheduler.step()
         else:
-            self._scheduler.step()
+            if self._decay_scheduler is not None:
+                if self._is_plateau:
+                    self._decay_scheduler.step(metric)
+                else:
+                    self._decay_scheduler.step()
+
+        self._current_epoch += 1

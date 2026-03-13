@@ -1,6 +1,7 @@
 """
 DDP Training Script
 Run with: CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=2 train.py
+test with: CUDA_VISIBLE_DEVICES=1 torchrun --nproc_per_node=1 train.py
 """
 import sys 
 from pathlib import Path
@@ -10,20 +11,20 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.timer import Timer
 from utils.config import get_config
 from data.idfraud import create_dataloaders
-from models import load_dino_model, build_classifier_model
-from training.metrics import BinaryClassificationMetrics
-from training.trainers import BinaryClassificationTrainer
+from eval.idfraud.evaluate import run_evaluation
+from eval.idfraud.leaderboard import create_leaderboard
+from training.trainers import idfraud_trainer
 from training.callbacks import build_checkpoint, build_early_stopping
 from training import build_loss_fn, build_optimizer, build_lr_scheduler
-from postprocess import save_pre_training, save_post_training, save_epoch
-from eval.idfraud.evaluate import run_evaluation
-from utils.device import setup_ddp, cleanup_ddp, is_main_process, wrap_model_ddp
+from utils import save_before_training, save_after_training, save_at_epoch_end
+from utils.device import setup_ddp, wrap_model_ddp, cleanup_ddp
+from models import build_model
 
 def main():
     timer = Timer()
 
     # Load config and extract values
-    cfg = get_config(name='train_config.yaml')
+    cfg = get_config(name='test_system.yaml')
 
     # Setup DDP
     local_rank = setup_ddp()
@@ -37,18 +38,23 @@ def main():
         batch_size=cfg.training.batch_size,
         num_workers=cfg.dataloader.num_workers,
         prefetch_factor=cfg.dataloader.prefetch_factor,
-        transform_cfg=cfg.transform)
+        persistent_workers=cfg.dataloader.persistent_workers,
+        pin_memory=cfg.dataloader.pin_memory,
+        drop_last=cfg.dataloader.drop_last,
+        image_size=cfg.transform.image_size,
+        normalize_mean=tuple(cfg.transform.normalize_mean),
+        normalize_std=tuple(cfg.transform.normalize_std),
+        sample_fraction=cfg.data.get('sample_fraction', 1.0))
     timer.record("data_processing")
     
     # Build model and wrap with DDP
-    backbone, backbone_dim = load_dino_model(cfg.model.backbone_name)
-    model = build_classifier_model(
+    model = build_model(
+        model_name=cfg.model.backbone_name,
         device=local_rank,
-        backbone_model=backbone,
-        input_dim=backbone_dim,
+        task=cfg.model.get('task', 'classification'),
         head_type=cfg.model.head_type,
         freeze_backbone=cfg.model.freeze_backbone)
-    ddp_model = wrap_model_ddp(model, local_rank) # wrap model with ddp
+    ddp_model = wrap_model_ddp(model, local_rank)
 
     # Build loss function, optimizer, and learning rate scheduler
     loss_fn = build_loss_fn(cfg.training.loss_fn)
@@ -60,31 +66,32 @@ def main():
     checkpoint = build_checkpoint(cfg.get('checkpoint', {}), run_dir=cfg.run_dir)
     timer.record("model_setup")
 
-    # Save config and data splits 
-    save_pre_training(cfg, cfg.run_dir, df_train, df_val)
+    # Save config and data splits
+    save_before_training(cfg, cfg.run_dir, df_train, df_val)
 
-    # Setup metrics handler and trainer
-    metrics_handler = BinaryClassificationMetrics(threshold=cfg.training.training_threshold)
-    trainer = BinaryClassificationTrainer(
-        model=model,
-        loss_fn=loss_fn,
+    # Train using idfraud_trainer
+    results = idfraud_trainer.train(
+        model=ddp_model,
+        train_dataloader=train_loader,
+        val_dataloader=valid_loader,
         optimizer=optimizer,
-        metrics_handler=metrics_handler,
+        loss_fn=loss_fn,
+        epochs=cfg.training.epochs,
         device=local_rank,
         scheduler=scheduler,
         sampler=train_sampler,
         early_stopping=early_stopping,
         checkpoint=checkpoint,
-        on_epoch_end=lambda history: save_epoch(cfg.run_dir, history),
+        on_epoch_end=lambda history: save_at_epoch_end(cfg.run_dir, history),
     )
-    results = trainer.train(train_loader, valid_loader, epochs=cfg.training.epochs)
     timer.record("training")
 
     # Save results, plots, and final model
-    save_post_training(cfg.run_dir, results, model, cfg.experiment.save_name, timer=timer)
+    save_after_training(cfg.run_dir, ddp_model=ddp_model, save_name=cfg.experiment.save_name, timer=timer)
 
     # Run evaluation --> generates a dataframe containing predictions from all epochs
     run_evaluation(cfg)
+    create_leaderboard(cfg)
     timer.record("evaluation")
 
     cleanup_ddp()

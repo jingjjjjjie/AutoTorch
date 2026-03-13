@@ -7,8 +7,7 @@ from torch.utils.data import DataLoader
 from data.idfraud.preprocessing import preprocess_csv, map_path_to_source
 from data.idfraud.transforms import get_transform
 from data.idfraud.dataset import IDFraudTorchDataset
-from models import build_classifier_model, load_weights_from_checkpoint
-from models.dino import load_dino_model
+from models import build_model, load_weights_from_checkpoint
 from utils.device import is_main_process
 
 PRED_DF_OUTPUT_PATH = 'eval_predictions.csv'
@@ -31,10 +30,9 @@ def run_evaluation(cfg, device='cuda'):
         return None
 
     # Load config
-    save_dir = cfg['experiment']['save_dir']
-    save_name = cfg['experiment']['save_name']
+    save_dir = cfg.experiment.save_dir
+    save_name = cfg.experiment.save_name
     run_dir = os.path.join(save_dir, save_name)
-
     eval_batches = cfg['data']['eval_batches']
     image_type = cfg['data']['image_type']
     batch_size = cfg['training']['batch_size']
@@ -43,6 +41,7 @@ def run_evaluation(cfg, device='cuda'):
     prefetch_factor = cfg['dataloader']['prefetch_factor']
     non_blocking=cfg['dataloader']['non_blocking']
     persistent_workers = cfg['dataloader']['persistent_workers']
+    backbone_name = cfg.model.backbone_name
 
     # Find checkpoints
     checkpoint_folder = os.path.join(run_dir, 'checkpoints')
@@ -53,18 +52,23 @@ def run_evaluation(cfg, device='cuda'):
     evaluation_df = map_path_to_source(evaluation_df, training_mode=False)
     
     device = torch.device(device if torch.cuda.is_available() else 'cpu')
-    transform = get_transform(cfg)
+    transform = get_transform(
+        image_size=cfg.transform.image_size,
+        normalize_mean=tuple(cfg.transform.normalize_mean),
+        normalize_std=tuple(cfg.transform.normalize_std))
     dataset = IDFraudTorchDataset(evaluation_df, transform=transform)
     dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory, persistent_workers=persistent_workers, prefetch_factor=prefetch_factor)
-
-    # load dino model 
-    backbone, backbone_dim = load_dino_model(cfg)
 
     output_path = os.path.join(run_dir, PRED_DF_OUTPUT_PATH)
 
     # Run inference for each checkpoint
     for epoch_num, ckpt_path in checkpoints:
-        model = build_classifier_model(cfg, device, backbone, backbone_dim)
+        model = build_model(
+            model_name=backbone_name,
+            device=device,
+            task=cfg.model.get('task', 'classification'),
+            head_type=cfg.model.head_type,
+            freeze_backbone=cfg.model.freeze_backbone)
         model = load_weights_from_checkpoint(model, ckpt_path, device)
         model.eval()
 

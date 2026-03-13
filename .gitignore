@@ -5,6 +5,7 @@ pretrained/
 runs/
 **/testing.ipynb
 **/train_config.yaml
+**/test_system.yaml
 **/eval_config.yaml
 **/eval_config.yaml
 **/playground.ipynb

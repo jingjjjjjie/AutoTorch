@@ -1,29 +1,29 @@
 experiment:
-  save_dir: /home/jingjie/AutoTorch/runs # use absolute path here 
-  save_name: test_run
+  save_dir: /mnt3/repo_and_weights/runs # use absolute path here 
+  save_name: Ex2_dinov3_convnext_large_v1_512_ori
 model:
-  backbone_name: dinov3_convnext_tiny
+  backbone_name: dinov3_convnext_large
   freeze_backbone: false
   head_type: v1
   
 training:
-  batch_size: 32
-  epochs: 5
-  learning_rate: 1e-7
+  batch_size: 8
+  epochs: 100
+  learning_rate: 5e-6
   loss_fn: bce_with_logits
   optimizer: adamw
   training_threshold: 0.5
-  weight_decay: 1e-6 #TODO find out the effect of weight decay
+  weight_decay: 0.05 
 
 early_stopping:
-  delta: 0.0001
+  delta: 0.001
   enabled: true
   patience: 15
   verbose: true
 
 scheduler: #TODO refactor and check this 
   decay_type: cosine
-  eta_min: 1e-6
+  eta_min: 1e-7
   gamma: 0.1
   step_size: 10
   warmup_epochs: 5
@@ -38,140 +38,141 @@ dataloader:
 data:
   image_type: ori
   train_val_split: 0.9
+  sample_fraction: 0.5 # Fraction of data to sample per batch (0.0-1.0)
   train_batches:
   - batch_production_202207_redone_rejectedcase/index_annotation.csv
-  # - batch_production_202209_redone_rejectedcase/index_annotation.csv
-  # - batch_legacy_20221026_subset/index_annotation_ori.csv
-  # - batch_datacollection_20230214_none_recapture/batch_datacollection_20230214_recapture_train_set.csv
-  # - batch_datacollection_20231219_wiseai_recapture_10IC/index_annotation_train_set.csv
-  # - batch_issue_20230322_none_recapture_colorprint/index_annotation_mykadfront.csv
-  # - batch_production_20240206_none_1000/index_annotation_mykadfront_annotated_train_set.csv
-  # - batch_datacollection_20240409_production202207redone_fullpagecolorprinttrain/index_annotation.csv
-  # - batch_datacollection_20240303_wiseai_recapture_whitepaperbg/index_annotation_WhitePaper_train_set_w_square.csv
-  # - batch_issue_20240412_partner_both_general/index_annotation_mykadfront.csv
-  # - batch_issue_20240704_snt_both_colorghostwhitebg/index_annotation_mykadfront.csv
-  # - batch_issue_20240704_snt_replay/index_annotation_mykadfront.csv
-  # - production_20240625_whitebg_genuine/index_annotations_mykadfront_filtered_train_set.csv
-  # - 2024-07-whitebg_fraud/index_annotation_mykadfront_train_set.csv
-  # - BNM_20240726/index_annotation_mykadfront_Ench12Weakness.csv
-  # - 2024-08-custom-device-variance/updated_annotations_train_v2.csv
-  # - batch_datacollection_20240806_wiseai_both_whitepapercrossplatform/updated_annotations_train.csv
-  # - batch_issue_20240823_snt_app/index_annotation_mykadfront.csv
-  # - 2024-11-inkjet_printer_train/index_annotation_mykadfront.csv
-  # - 2025-01-inkjet_printer_cutout_train/index_annotation_mykadfront.csv
-  # - batch_production_20250416_none_mypr/index_annotation_mypr_crop_train.csv
-  # - batch_production_20250416_none_mytentera/index_annotation_mytentera_crop_train.csv
-  # - batch_production_20250514_none_mytentera/index_annotation_mytentera_crop_train.csv
-  # - 2025-05-printed_cutout/index_annotation_mykadfront_train.csv
-  # - 2025-07-fakeidtester/index_annotation_mykadfront_train_v2.csv
-  # - 2025-01-inkjet_printer_cutout_train/index_annotation_mykadfront_augmented_masked_bw.csv
-  # - batch_production_20240206_none_1000/index_annotation_mykadfront_annotated_train_set_augmented_masked_bw.csv
-  # - 1.4 Grayscale Print Cutout Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_train.csv
-  # - 1.5 Color Print Cutout Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_train.csv
-  # - 1.3 Color Print Test/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_train.csv
-  # - 1.2 Grayscale Print Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_train.csv
-  # - 1.6.1 Color Print with Background 2 Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_train.csv
-  # - 1.10 Replay Monitor Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_train.csv
-  # - 1.11 Replay Mobile Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_train.csv
-  # - 1.12 Replay Tablet Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_train.csv
-  # - 1.1 Genuine with Background Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_train.csv
-  # - 20250804_myekyc_fullday/filtered_annotated_index_annotation_mykadfront_train.csv
-  # - batch_issue_20250910_bmmb_both_general/index_annotation_mykadfront_v3.csv 
-  # - 20250804_myekyc_fullday/annotated_filtered_annotated_index_annotation_mykadfront_genuine.csv
-  # - 20250804_myekyc_fullday/annotated_filtered_annotated_index_annotation_mykadfront_print.csv
-  # - 20250806_myekyc_owntester/annotated_index_annotation_mykadfront_v3_genuine.csv
-  # - 20250806_myekyc_owntester/annotated_index_annotation_mykadfront_v3_print.csv
-  # - 20250806_myekyc_owntester/annotated_index_annotation_mykadfront_v3_replay.csv
-  # - 20250808_genuine&cutout/annotated_index_annotation_genuine.csv
-  # - 20250808_genuine&cutout/annotated_index_annotation_print_cutout.csv
-  # - 20250808_replay_tablet/annotated_index_annotation_genuine.csv
-  # - 20250808_replay_tablet/annotated_index_annotation_replay.csv
-  # - 20250808_tamper_face/annotated_index_annotation_genuine.csv
-  # - 20250807_genuine/annotated_index_annotation.csv
-  # - 20250807_tamper_4/annotated_index_annotation.csv
-  # - 20250811_genuine_ekyc/filtered_index_annotation.csv
-  # - 20250811_Replay_FullPage/filtered_index_annotation_v2_print.csv
-  # - 20250811_Replay_FullPage/filtered_index_annotation_v2_replay.csv
-  # - 20250811_tamper_face/filtered_index_annotation.csv
-  # - 20250813_grayscale/annotated_annotated_index_annotation_mykadfront_print.csv
-  # - 20250813_grayscale/annotated_annotated_index_annotation_mykadfront_replay.csv
-  # - 20250813_grayscale/annotated_annotated_index_annotation_mykadfront_grayscale.csv
-  # - 20250813_wiseai_myid_test-dry_run/index_annotation_mykadfront_v4_print.csv
-  # - 20250813_wiseai_myid_test-dry_run/index_annotation_mykadfront_v4_replay.csv
+  - batch_production_202209_redone_rejectedcase/index_annotation.csv
+  - batch_legacy_20221026_subset/index_annotation_ori.csv
+  - batch_datacollection_20230214_none_recapture/batch_datacollection_20230214_recapture_train_set.csv
+  - batch_datacollection_20231219_wiseai_recapture_10IC/index_annotation_train_set.csv
+  - batch_issue_20230322_none_recapture_colorprint/index_annotation_mykadfront.csv
+  - batch_production_20240206_none_1000/index_annotation_mykadfront_annotated_train_set.csv
+  - batch_datacollection_20240409_production202207redone_fullpagecolorprinttrain/index_annotation.csv
+  - batch_datacollection_20240303_wiseai_recapture_whitepaperbg/index_annotation_WhitePaper_train_set_w_square.csv
+  - batch_issue_20240412_partner_both_general/index_annotation_mykadfront.csv
+  - batch_issue_20240704_snt_both_colorghostwhitebg/index_annotation_mykadfront.csv
+  - batch_issue_20240704_snt_replay/index_annotation_mykadfront.csv
+  - production_20240625_whitebg_genuine/index_annotations_mykadfront_filtered_train_set.csv
+  - 2024-07-whitebg_fraud/index_annotation_mykadfront_train_set.csv
+  - BNM_20240726/index_annotation_mykadfront_Ench12Weakness.csv
+  - 2024-08-custom-device-variance/updated_annotations_train_v2.csv
+  - batch_datacollection_20240806_wiseai_both_whitepapercrossplatform/updated_annotations_train.csv
+  - batch_issue_20240823_snt_app/index_annotation_mykadfront.csv
+  - 2024-11-inkjet_printer_train/index_annotation_mykadfront.csv
+  - 2025-01-inkjet_printer_cutout_train/index_annotation_mykadfront.csv
+  - batch_production_20250416_none_mypr/index_annotation_mypr_crop_train.csv
+  - batch_production_20250416_none_mytentera/index_annotation_mytentera_crop_train.csv
+  - batch_production_20250514_none_mytentera/index_annotation_mytentera_crop_train.csv
+  - 2025-05-printed_cutout/index_annotation_mykadfront_train.csv
+  - 2025-07-fakeidtester/index_annotation_mykadfront_train_v2.csv
+  - 2025-01-inkjet_printer_cutout_train/index_annotation_mykadfront_augmented_masked_bw.csv
+  - batch_production_20240206_none_1000/index_annotation_mykadfront_annotated_train_set_augmented_masked_bw.csv
+  - 1.4 Grayscale Print Cutout Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_train.csv
+  - 1.5 Color Print Cutout Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_train.csv
+  - 1.3 Color Print Test/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_train.csv
+  - 1.2 Grayscale Print Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_train.csv
+  - 1.6.1 Color Print with Background 2 Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_train.csv
+  - 1.10 Replay Monitor Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_train.csv
+  - 1.11 Replay Mobile Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_train.csv
+  - 1.12 Replay Tablet Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_train.csv
+  - 1.1 Genuine with Background Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_train.csv
+  - 20250804_myekyc_fullday/filtered_annotated_index_annotation_mykadfront_train.csv
+  - batch_issue_20250910_bmmb_both_general/index_annotation_mykadfront_v3.csv 
+  - 20250804_myekyc_fullday/annotated_filtered_annotated_index_annotation_mykadfront_genuine.csv
+  - 20250804_myekyc_fullday/annotated_filtered_annotated_index_annotation_mykadfront_print.csv
+  - 20250806_myekyc_owntester/annotated_index_annotation_mykadfront_v3_genuine.csv
+  - 20250806_myekyc_owntester/annotated_index_annotation_mykadfront_v3_print.csv
+  - 20250806_myekyc_owntester/annotated_index_annotation_mykadfront_v3_replay.csv
+  - 20250808_genuine&cutout/annotated_index_annotation_genuine.csv
+  - 20250808_genuine&cutout/annotated_index_annotation_print_cutout.csv
+  - 20250808_replay_tablet/annotated_index_annotation_genuine.csv
+  - 20250808_replay_tablet/annotated_index_annotation_replay.csv
+  - 20250808_tamper_face/annotated_index_annotation_genuine.csv
+  - 20250807_genuine/annotated_index_annotation.csv
+  - 20250807_tamper_4/annotated_index_annotation.csv
+  - 20250811_genuine_ekyc/filtered_index_annotation.csv
+  - 20250811_Replay_FullPage/filtered_index_annotation_v2_print.csv
+  - 20250811_Replay_FullPage/filtered_index_annotation_v2_replay.csv
+  - 20250811_tamper_face/filtered_index_annotation.csv
+  - 20250813_grayscale/annotated_annotated_index_annotation_mykadfront_print.csv
+  - 20250813_grayscale/annotated_annotated_index_annotation_mykadfront_replay.csv
+  - 20250813_grayscale/annotated_annotated_index_annotation_mykadfront_grayscale.csv
+  - 20250813_wiseai_myid_test-dry_run/index_annotation_mykadfront_v4_print.csv
+  - 20250813_wiseai_myid_test-dry_run/index_annotation_mykadfront_v4_replay.csv
   eval_batches:
   - 2024-07-whitebg_fraud/index_annotation_mykadfront_test_set.csv
-  # - 2024-11-inkjet_printer_eval/index_annotation_mykadfront.csv
-  # - batch_datacollection_20230214_none_recapture/batch_datacollection_20230214_recapture_eval_set.csv
-  # - batch_datacollection_20231023_wiseai_recapture_evalfixorigrotatealif/index_annotation_full.csv
-  # - batch_datacollection_20231219_wiseai_recapture_10IC/index_annotation_eval_set.csv
-  # - batch_datacollection_20240303_wiseai_recapture_whitepaperbg/index_annotation_WhitePaper_eval_set.csv
-  # - batch_datacollection_20240303_wiseai_recapture_whitepaperbg/index_annotation_WhitePaper_eval_set_square.csv
-  # - batch_datacollection_20240409_production202208redone_fullpagecolorprinteval/index_annotation_square.csv
-  # - batch_datacollection_20240409_production202208redone_fullpagecolorprinteval/index_annotation_w_genuine.csv
-  # - batch_issue_20230322_none_recapture_colorprint/index_annotation_mykadfront.csv
-  # - batch_issue_20240403_none_recapture_replaymobile/index_annotation_mykadfront.csv
-  # - batch_issue_20240408_partner_recapture_fullcolorprint/index_annotation_mykadfront.csv
-  # - batch_issue_20240412_partner_both_general/index_annotation_mykadfront.csv
-  # - batch_issue_20240704_snt_both_colorghostwhitebg/index_annotation_mykadfront.csv
-  # - batch_issue_20240704_snt_fullpagecolorprint/index_annotation_mykadfront.csv
-  # - batch_issue_20240704_snt_replay/index_annotation_mykadfront.csv
-  # - BNM_20240726/index_annotation_mykadfront_Ench12Issue.csv
-  # - batch_issue_20240823_snt_app/index_annotation_mykadfront.csv
-  # - batch_issue_20241202_snt_mobile/index_annotation_mykadfront.csv
-  # - batch_issue_20241203_postdigi_colorprint/index_annotation_mykadfront.csv
-  # - batch_issue_set/index_annotation_mykadfront_background.csv
-  # - batch_production_202208_redone/index_annotation.csv
-  # - batch_production_20240206_none_1000/index_annotation_mykadfront_annotated_eval_set.csv
-  # - batch_production_20240405_none_merged/index_annotation.csv
-  # - SNT_20240513_20240519_random/index_annotation_mykadfront_filtered.csv
-  # - production_20240625_whitebg_genuine/index_annotations_mykadfront_filtered_test_set.csv
-  # - BNM_20240726/index_annotation_mykadfront_processed_filtered.csv
-  # - batch_production_20250416_none_mypr/index_annotation_mypr_crop_eval.csv
-  # - batch_production_20250416_none_mytentera/index_annotation_mytentera_crop_eval.csv
-  # - batch_production_20250514_none_mytentera/index_annotation_mytentera_crop_eval.csv
-  # - 2025-05-printed_cutout/index_annotation_mykadfront_eval.csv
-  # - 2025-07-fakeidtester/index_annotation_mykadfront_eval_v2.csv
-  # - 2025-01-inkjet_printer_cutout_eval/index_annotation_mykadfront_augmented_masked_bw.csv
-  # - batch_production_20240206_none_1000/index_annotation_mykadfront_annotated_eval_set_augmented_masked_bw.csv
-  # - 1.4 Grayscale Print Cutout Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_test.csv
-  # - 1.5 Color Print Cutout Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_test.csv
-  # - 1.3 Color Print Test/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_test.csv
-  # - 1.2 Grayscale Print Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_test.csv
-  # - 1.6.1 Color Print with Background 2 Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_test.csv
-  # - 1.10 Replay Monitor Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_test.csv
-  # - 1.11 Replay Mobile Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_test.csv
-  # - 1.12 Replay Tablet Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_test.csv
-  # - 1.1 Genuine with Background Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_test.csv
-  # - 20250804_myekyc_fullday/annotated_filtered_annotated_index_annotation_mykadfront_genuine.csv
-  # - 20250804_myekyc_fullday/annotated_filtered_annotated_index_annotation_mykadfront_print.csv
-  # - 20250805_myekyc_fullday/annotated_index_annotation_mykadfront_cutout.csv
-  # - 20250805_myekyc_fullday/annotated_index_annotation_mykadfront_genuine.csv
-  # - 20250805_myekyc_fullday/annotated_index_annotation_mykadfront_printed.csv
-  # - 20250805_myekyc_fullday/annotated_index_annotation_mykadfront_replay.csv
-  # - 20250806_myekyc_owntester/annotated_index_annotation_mykadfront_v3_genuine.csv
-  # - 20250806_myekyc_owntester/annotated_index_annotation_mykadfront_v3_print.csv
-  # - 20250806_myekyc_owntester/annotated_index_annotation_mykadfront_v3_replay.csv
-  # - "20250808_genuine&cutout/annotated_index_annotation_genuine.csv"
-  # - "20250808_genuine&cutout/annotated_index_annotation_print_cutout.csv"
-  # - 20250808_replay_tablet/annotated_index_annotation_genuine.csv
-  # - 20250808_replay_tablet/annotated_index_annotation_replay.csv
-  # - 20250808_tamper_face/annotated_index_annotation_genuine.csv
-  # - 20250807_genuine/annotated_index_annotation.csv
-  # - 20250807_tamper_4/annotated_index_annotation.csv
-  # - 20250811_genuine_ekyc/filtered_index_annotation.csv
-  # - 20250811_Replay_FullPage/filtered_index_annotation_v2_print.csv
-  # - 20250811_Replay_FullPage/filtered_index_annotation_v2_replay.csv
-  # - 20250811_tamper_face/filtered_index_annotation.csv
-  # - 20250813_grayscale/annotated_annotated_index_annotation_mykadfront_print.csv
-  # - 20250813_grayscale/annotated_annotated_index_annotation_mykadfront_replay.csv
-  # - 20250813_grayscale/annotated_annotated_index_annotation_mykadfront_grayscale.csv
-  # - 20250813_wiseai_myid_test-dry_run/index_annotation_mykadfront_v4_print.csv
-  # - 20250813_wiseai_myid_test-dry_run/index_annotation_mykadfront_v4_replay.csv
-  # - 20250813_wiseai_myid_test-dry_run/index_annotation_mykadfront_v4_genuine.csv
-  # - batch_issue_20250910_bmmb_both_general/index_annotation_mykadfront_v3.csv
-  # - batch_production_20250830_20250903_myid/annotated_index_annotation_mykadfront_v2_genuine.csv
-  # - batch_production_20250830_20250903_myid/annotated_index_annotation_mykadfront_v2_print.csv
-  # - batch_production_20250830_20250903_myid/annotated_index_annotation_mykadfront_v2_replay.csv
+  - 2024-11-inkjet_printer_eval/index_annotation_mykadfront.csv
+  - batch_datacollection_20230214_none_recapture/batch_datacollection_20230214_recapture_eval_set.csv
+  - batch_datacollection_20231023_wiseai_recapture_evalfixorigrotatealif/index_annotation_full.csv
+  - batch_datacollection_20231219_wiseai_recapture_10IC/index_annotation_eval_set.csv
+  - batch_datacollection_20240303_wiseai_recapture_whitepaperbg/index_annotation_WhitePaper_eval_set.csv
+  - batch_datacollection_20240303_wiseai_recapture_whitepaperbg/index_annotation_WhitePaper_eval_set_square.csv
+  - batch_datacollection_20240409_production202208redone_fullpagecolorprinteval/index_annotation_square.csv
+  - batch_datacollection_20240409_production202208redone_fullpagecolorprinteval/index_annotation_w_genuine.csv
+  - batch_issue_20230322_none_recapture_colorprint/index_annotation_mykadfront.csv
+  - batch_issue_20240403_none_recapture_replaymobile/index_annotation_mykadfront.csv
+  - batch_issue_20240408_partner_recapture_fullcolorprint/index_annotation_mykadfront.csv
+  - batch_issue_20240412_partner_both_general/index_annotation_mykadfront.csv
+  - batch_issue_20240704_snt_both_colorghostwhitebg/index_annotation_mykadfront.csv
+  - batch_issue_20240704_snt_fullpagecolorprint/index_annotation_mykadfront.csv
+  - batch_issue_20240704_snt_replay/index_annotation_mykadfront.csv
+  - BNM_20240726/index_annotation_mykadfront_Ench12Issue.csv
+  - batch_issue_20240823_snt_app/index_annotation_mykadfront.csv
+  - batch_issue_20241202_snt_mobile/index_annotation_mykadfront.csv
+  - batch_issue_20241203_postdigi_colorprint/index_annotation_mykadfront.csv
+  - batch_issue_set/index_annotation_mykadfront_background.csv
+  - batch_production_202208_redone/index_annotation.csv
+  - batch_production_20240206_none_1000/index_annotation_mykadfront_annotated_eval_set.csv
+  - batch_production_20240405_none_merged/index_annotation.csv
+  - SNT_20240513_20240519_random/index_annotation_mykadfront_filtered.csv
+  - production_20240625_whitebg_genuine/index_annotations_mykadfront_filtered_test_set.csv
+  - BNM_20240726/index_annotation_mykadfront_processed_filtered.csv
+  - batch_production_20250416_none_mypr/index_annotation_mypr_crop_eval.csv
+  - batch_production_20250416_none_mytentera/index_annotation_mytentera_crop_eval.csv
+  - batch_production_20250514_none_mytentera/index_annotation_mytentera_crop_eval.csv
+  - 2025-05-printed_cutout/index_annotation_mykadfront_eval.csv
+  - 2025-07-fakeidtester/index_annotation_mykadfront_eval_v2.csv
+  - 2025-01-inkjet_printer_cutout_eval/index_annotation_mykadfront_augmented_masked_bw.csv
+  - batch_production_20240206_none_1000/index_annotation_mykadfront_annotated_eval_set_augmented_masked_bw.csv
+  - 1.4 Grayscale Print Cutout Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_test.csv
+  - 1.5 Color Print Cutout Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_test.csv
+  - 1.3 Color Print Test/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_test.csv
+  - 1.2 Grayscale Print Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_test.csv
+  - 1.6.1 Color Print with Background 2 Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_test.csv
+  - 1.10 Replay Monitor Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_test.csv
+  - 1.11 Replay Mobile Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_test.csv
+  - 1.12 Replay Tablet Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_test.csv
+  - 1.1 Genuine with Background Test Plan/cleaned_filtered_annotated_index_annotation_jpg_subject_mykadfront_test.csv
+  - 20250804_myekyc_fullday/annotated_filtered_annotated_index_annotation_mykadfront_genuine.csv
+  - 20250804_myekyc_fullday/annotated_filtered_annotated_index_annotation_mykadfront_print.csv
+  - 20250805_myekyc_fullday/annotated_index_annotation_mykadfront_cutout.csv
+  - 20250805_myekyc_fullday/annotated_index_annotation_mykadfront_genuine.csv
+  - 20250805_myekyc_fullday/annotated_index_annotation_mykadfront_printed.csv
+  - 20250805_myekyc_fullday/annotated_index_annotation_mykadfront_replay.csv
+  - 20250806_myekyc_owntester/annotated_index_annotation_mykadfront_v3_genuine.csv
+  - 20250806_myekyc_owntester/annotated_index_annotation_mykadfront_v3_print.csv
+  - 20250806_myekyc_owntester/annotated_index_annotation_mykadfront_v3_replay.csv
+  - "20250808_genuine&cutout/annotated_index_annotation_genuine.csv"
+  - "20250808_genuine&cutout/annotated_index_annotation_print_cutout.csv"
+  - 20250808_replay_tablet/annotated_index_annotation_genuine.csv
+  - 20250808_replay_tablet/annotated_index_annotation_replay.csv
+  - 20250808_tamper_face/annotated_index_annotation_genuine.csv
+  - 20250807_genuine/annotated_index_annotation.csv
+  - 20250807_tamper_4/annotated_index_annotation.csv
+  - 20250811_genuine_ekyc/filtered_index_annotation.csv
+  - 20250811_Replay_FullPage/filtered_index_annotation_v2_print.csv
+  - 20250811_Replay_FullPage/filtered_index_annotation_v2_replay.csv
+  - 20250811_tamper_face/filtered_index_annotation.csv
+  - 20250813_grayscale/annotated_annotated_index_annotation_mykadfront_print.csv
+  - 20250813_grayscale/annotated_annotated_index_annotation_mykadfront_replay.csv
+  - 20250813_grayscale/annotated_annotated_index_annotation_mykadfront_grayscale.csv
+  - 20250813_wiseai_myid_test-dry_run/index_annotation_mykadfront_v4_print.csv
+  - 20250813_wiseai_myid_test-dry_run/index_annotation_mykadfront_v4_replay.csv
+  - 20250813_wiseai_myid_test-dry_run/index_annotation_mykadfront_v4_genuine.csv
+  - batch_issue_20250910_bmmb_both_general/index_annotation_mykadfront_v3.csv
+  - batch_production_20250830_20250903_myid/annotated_index_annotation_mykadfront_v2_genuine.csv
+  - batch_production_20250830_20250903_myid/annotated_index_annotation_mykadfront_v2_print.csv
+  - batch_production_20250830_20250903_myid/annotated_index_annotation_mykadfront_v2_replay.csv
 
 checkpoint:
   enabled: true

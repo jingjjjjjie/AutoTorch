@@ -1,2 +1,1 @@
-from .binary_classification_trainer import BinaryClassificationTrainer
-from .legacy_classification_trainer import train
+from . import idfraud_trainer

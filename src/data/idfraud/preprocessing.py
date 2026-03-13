@@ -1,14 +1,13 @@
 '''
 Description: Data utilities for loading and preprocessing training batches
-** currently checks mnt3 only
+** currently resolves the absolute paths of image to MNT4PATH,
+** currently resolves and checks the csv batches in MNT3PATH
 '''
-import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import pandas as pd
-from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 from utils.device import is_main_process
+from sklearn.model_selection import train_test_split
 
 MNT3PATH = '/mnt3/auto-ekyc/idrecapture/datasets'
 MNT4PATH = '/mnt4/auto-ekyc/idrecapture/datasets'
@@ -50,13 +49,14 @@ def map_path_to_source(df, source_path=MNT4PATH, training_mode=True):
     return df
 
 
-def preprocess_csv(image_type, batch_list, training_mode=True):
+def preprocess_csv(image_type, batch_list, training_mode=True, sample_fraction=1.0):
     """Reads and combines batch CSVs into a single DataFrame.
 
     Args:
         image_type: Image column to use for path resolution. One of 'ori' or 'crop'.
         batch_list: List of relative batch CSV paths from the config.
         training_mode: If True, assumes DDP and shows tqdm progress only on rank 0. Defaults to True.
+        sample_fraction: Fraction of data to keep (0.0-1.0). Stratified by label. Defaults to 1.0 (all data).
 
     Returns:
         pd.DataFrame: Combined DataFrame with 'path', 'label', 'batch_directory', and 'filename' columns.
@@ -103,6 +103,11 @@ def preprocess_csv(image_type, batch_list, training_mode=True):
                 else:
                     raise ValueError(f"Unsupported image_type '{image_type}'. Supported types: 'crop', 'ori'.")
 
+                # Sample this batch if fraction < 1.0 (keep at least 1)
+                if sample_fraction < 1.0:
+                    n_samples = max(1, round(len(batch_data) * sample_fraction))
+                    batch_data = batch_data.sample(n=n_samples, random_state=42)
+
                 batch_data['original_batch_name'] = batch  # original batch path from config
                 batch_data['batch_directory'] = batch_dir  # the name of the batch (directory name)
                 batch_data['filename'] = batch_data['path'].apply(os.path.basename)  # the image file name
@@ -125,7 +130,7 @@ def preprocess_csv(image_type, batch_list, training_mode=True):
     # if training mode is set, check if is main process of DDP, show progress if yes. Show tqdm progress in eval
     show_progress = not training_mode or is_main_process()
     _check_duplicate_or_empty(batch_list)
-    main_data = _combine_batch(image_type, batch_list)
+    main_data, missing_batches = _combine_batch(image_type, batch_list)
 
     return main_data
 

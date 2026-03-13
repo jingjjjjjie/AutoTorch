@@ -27,17 +27,9 @@ class LRScheduler:
 
     def _build(self, cfg, optimizer):
         """Build the underlying PyTorch scheduler."""
-        warmup_epochs = cfg['scheduler']['warmup_epochs']
-        decay_type = cfg['scheduler']['decay_type']
-        total_epochs = cfg['training']['epochs']
-        step_size = cfg['scheduler']['step_size']
-        gamma = float(cfg['scheduler']['gamma'])
-        eta_min = float(cfg['scheduler']['eta_min'])
-
-        # Plateau-specific params
-        patience = cfg['scheduler'].get('patience', 10)
-        factor = cfg['scheduler'].get('factor', 0.1)
-        min_lr = cfg['scheduler'].get('min_lr', 1e-6)
+        warmup_epochs = cfg.scheduler.get('warmup_epochs', 0)
+        decay_type = cfg.scheduler.get('decay_type', None)
+        total_epochs = cfg.training.epochs
 
         schedulers = []
         milestones = []
@@ -49,30 +41,24 @@ class LRScheduler:
             schedulers.append(LambdaLR(optimizer, lr_lambda))
             milestones.append(warmup_epochs)
 
-        # Decay scheduler
-        if decay_type == 'step' and step_size > 0:
-            schedulers.append(StepLR(optimizer, step_size=step_size, gamma=gamma))
+        # Decay scheduler - only read params needed for each type
+        if decay_type == 'step':
+            step_size = cfg.scheduler.step_size
+            gamma = cfg.scheduler.get('gamma', 0.1)
+            if step_size > 0:
+                schedulers.append(StepLR(optimizer, step_size=step_size, gamma=gamma))
 
         elif decay_type == 'cosine':
-            # implements a cosine annealing schedule that gradually reduces the learning rate from an 
-            # initial value to a minimum value following a cosine curve
-            t_max = max(1, total_epochs - warmup_epochs) # guard, TODO: REVISIT
+            eta_min = cfg.scheduler.get('eta_min', 1e-7)
+            t_max = max(1, total_epochs - warmup_epochs)
             schedulers.append(CosineAnnealingLR(optimizer, T_max=t_max, eta_min=eta_min))
 
         elif decay_type == 'plateau':
-            # ReduceLROnPlateau: reduces LR when metric stops improving
-            # Plateau?
-            # ├─ No  → keep LR
-            # └─ Yes → reduce LR
-            # https://pytorch.org/docs/stable/generated/torch.optim.lr_scheduler.ReduceLROnPlateau.html
-            return ReduceLROnPlateau(
-                optimizer, # the scheduler directly modifies the optimizer's learning rate
-                mode='min',
-                factor=factor,
-                patience=patience,
-                min_lr=min_lr,
-                verbose=True
-            )
+            patience = cfg.scheduler.get('patience', 10)
+            factor = cfg.scheduler.get('factor', 0.1)
+            min_lr = cfg.scheduler.get('min_lr', 1e-6)
+            return ReduceLROnPlateau(optimizer, mode='min', factor=factor,
+                                     patience=patience, min_lr=min_lr, verbose=True)
 
         # Return appropriate scheduler
         if len(schedulers) == 0:

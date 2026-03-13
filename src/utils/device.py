@@ -10,6 +10,7 @@ Process 1: runs train.py → setup_ddp() → LOCAL_RANK=1
 import os
 import torch
 import torch.distributed as dist
+from functools import wraps
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 def setup_ddp()-> int:
@@ -30,17 +31,25 @@ def cleanup_ddp():
     '''Destroy the process group.'''
     dist.destroy_process_group()
 
-def is_main_process():
+def is_main_process() -> bool:
     '''
-    Check if this is the main process (rank 0).
-    In DDP, you spawn multiple processes (one per GPU). Without this check, everything happens N times:
-    It's used to ensure only one process does:
-    - Printing progress
-    - Saving the model
-    - Writing logs/CSVs
-    - Creating plots
+    Check if this is the main process.
+    - DDP mode: returns True only for rank 0
+    - Non-DDP mode: always returns True (single process is always main)
     '''
-    return dist.get_rank() == 0
+    if dist.is_initialized():
+        return dist.get_rank() == 0
+    return True
+
+
+def main_process_only(func):
+    '''Decorator to run function only on main process (rank 0).'''
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if is_main_process():
+            return func(*args, **kwargs)
+    return wrapper
+
 
 def wrap_model_ddp(model: torch.nn.Module, local_rank: int) -> torch.nn.Module:
     '''Wrap model with DDP.'''

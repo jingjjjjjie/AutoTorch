@@ -127,12 +127,17 @@ def train(model: torch.nn.Module,
         if sampler is not None:
             sampler.set_epoch(epoch)
         train_loss, train_acc, train_apcer, train_bpcer = train_step(
-            model=model, dataloader=train_dataloader,
-            loss_fn=loss_fn, optimizer=optimizer, device=device
+            model=model, 
+            dataloader=train_dataloader,
+            loss_fn=loss_fn, 
+            optimizer=optimizer, 
+            device=device
         )
         val_loss, val_acc, val_apcer, val_bpcer = val_step(
-            model=model, dataloader=val_dataloader,
-            loss_fn=loss_fn, device=device
+            model=model, 
+            dataloader=val_dataloader,
+            loss_fn=loss_fn, 
+            device=device
         )
 
         if scheduler:

@@ -8,7 +8,6 @@ from torch.utils.data import Dataset
 
 class IDFraudTorchDataset(Dataset):
     """Dataset for loading images and labels from a DataFrame."""
-
     def __init__(self, df, transform=None, gt_label='label', img_path='path'):
         """
         Args:

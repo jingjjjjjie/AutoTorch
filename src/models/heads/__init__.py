@@ -1,12 +1,13 @@
 '''
 Task-specific head architectures.
 '''
-from .classification import ClassificationHeadV1, LegacyIDFraudHead
+from .classification import ClassificationHeadV1, LegacyIDFraudHead, LegacyIdFraudHeadv1
 
 HEAD_MAP = {
     'classification': {
         'v1': ClassificationHeadV1,
         'legacy': LegacyIDFraudHead,
+        'legacy_v1': LegacyIdFraudHeadv1,
     },
 }
 

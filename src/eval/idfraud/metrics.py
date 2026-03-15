@@ -4,9 +4,9 @@ Use the evaluate function: run_eval_classification to evaluate
 '''
 import torch
 
-def count_tp_tn_fp_fn(logits, y_true):
+def count_tp_tn_fp_fn(output, y_true, output_type='logits'):
     """Returns raw TP, TN, FP, FN counts for a batch."""
-    probs = torch.sigmoid(logits)
+    probs = torch.sigmoid(output) if output_type == 'logits' else output
     preds = (probs > 0.5).long()
 
     tp = ((preds == 1) & (y_true == 1)).sum().item()
@@ -26,7 +26,7 @@ def compute_binary_metrics(tp, tn, fp, fn):
     bpcer = fp / (tn + fp) if (tn + fp) else -1  # -1 if no genuine samples
     return acc, apcer, bpcer
 
-def run_eval_classification(model, dataloader, device, threshold=0.5):
+def run_eval_classification(model, dataloader, device, threshold=0.5, output_type='logits'):
     """Run evaluation and return metrics."""
     model.eval()
     tp, tn, fp, fn = 0, 0, 0, 0
@@ -35,8 +35,8 @@ def run_eval_classification(model, dataloader, device, threshold=0.5):
     with torch.inference_mode():
         for X, y in dataloader:
             X, y = X.to(device), y.to(device)
-            logits = model(X).squeeze(dim=1)
-            probs = torch.sigmoid(logits)
+            output = model(X).squeeze(dim=1)
+            probs = torch.sigmoid(output) if output_type == 'logits' else output
             preds = (probs > threshold).long()
 
             tp += ((preds == 1) & (y == 1)).sum().item()

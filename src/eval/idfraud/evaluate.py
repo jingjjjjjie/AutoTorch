@@ -33,15 +33,16 @@ def run_evaluation(cfg, device='cuda'):
     save_dir = cfg.experiment.save_dir
     save_name = cfg.experiment.save_name
     run_dir = os.path.join(save_dir, save_name)
-    eval_batches = cfg['data']['eval_batches']
-    image_type = cfg['data']['image_type']
-    batch_size = cfg['training']['batch_size']
-    pin_memory = cfg['dataloader']['pin_memory']
-    num_workers = cfg['dataloader']['num_workers']
-    prefetch_factor = cfg['dataloader']['prefetch_factor']
-    non_blocking=cfg['dataloader']['non_blocking']
-    persistent_workers = cfg['dataloader']['persistent_workers']
+    eval_batches = cfg.data.eval_batches
+    image_type = cfg.data.image_type
+    batch_size = cfg.training.batch_size
+    pin_memory = cfg.dataloader.pin_memory
+    num_workers = cfg.dataloader.num_workers
+    prefetch_factor = cfg.dataloader.prefetch_factor
+    non_blocking= cfg.dataloader.non_blocking
+    persistent_workers = cfg.dataloader.persistent_workers
     backbone_name = cfg.model.backbone_name
+    output_type = cfg.model.output_type  # 'logits' or 'probs'
 
     # Find checkpoints
     checkpoint_folder = os.path.join(run_dir, 'checkpoints')
@@ -77,11 +78,11 @@ def run_evaluation(cfg, device='cuda'):
             for X, _ in tqdm(dataloader, desc=f"Inference ckpt{epoch_num}"):
                 X = X.to(device, non_blocking=non_blocking)
                 # Forward pass
-                logits = model(X)
+                output = model(X)
                 # Remove channel dimension
-                logits = logits.squeeze(1)
-                # Convert logits to probabilities
-                probs = torch.sigmoid(logits)
+                output = output.squeeze(1)
+                # Convert to probabilities (only if model outputs logits)
+                probs = torch.sigmoid(output) if output_type == 'logits' else output
                 # Move to CPU and convert to Python list
                 probs = probs.cpu().tolist()
                 # Store results

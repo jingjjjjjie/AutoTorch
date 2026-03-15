@@ -83,16 +83,17 @@ def main():
         early_stopping=early_stopping,
         checkpoint=checkpoint,
         on_epoch_end=lambda history: save_at_epoch_end(cfg.run_dir, history),
+        output_type=cfg.model.output_type,
     )
     timer.record("training")
-
-    # Save results, plots, and final model
-    save_after_training(cfg.run_dir, ddp_model=ddp_model, save_name=cfg.experiment.save_name, timer=timer)
 
     # Run evaluation --> generates a dataframe containing predictions from all epochs
     run_evaluation(cfg)
     create_leaderboard(cfg)
     timer.record("evaluation")
+
+    # Save results-log.csv, update configs, plots, and final model
+    save_after_training(cfg.run_dir, ddp_model=ddp_model, save_name=cfg.experiment.save_name, timer=timer)
 
     cleanup_ddp()
 

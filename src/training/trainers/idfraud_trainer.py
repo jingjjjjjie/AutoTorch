@@ -13,7 +13,8 @@ def train_step(model: torch.nn.Module,
                loss_fn: torch.nn.Module,
                optimizer: torch.optim.Optimizer,
                device: torch.device,
-               non_blocking: bool = True) -> Tuple[float, float, float, float]:
+               non_blocking: bool = True,
+               output_type: str = 'logits') -> Tuple[float, float, float, float]:
     """
     Trains a PyTorch model for a single epoch.
     
@@ -40,7 +41,7 @@ def train_step(model: torch.nn.Module,
         loss.backward()
         optimizer.step()
 
-        tp, tn, fp, fn = count_tp_tn_fp_fn(y_pred, y)
+        tp, tn, fp, fn = count_tp_tn_fp_fn(y_pred, y, output_type)
         total_tp += tp
         total_tn += tn
         total_fp += fp
@@ -59,7 +60,8 @@ def val_step(model: torch.nn.Module,
               dataloader: torch.utils.data.DataLoader,
               loss_fn: torch.nn.Module,
               device: torch.device,
-              non_blocking: bool = True) -> Tuple[float, float, float, float]:
+              non_blocking: bool = True,
+              output_type: str = 'logits') -> Tuple[float, float, float, float]:
     """
     Validates a PyTorch model for a single epoch.
 
@@ -81,7 +83,7 @@ def val_step(model: torch.nn.Module,
             loss = loss_fn(y_pred, y.float())
             val_loss_sum += loss.item()
 
-            tp, tn, fp, fn = count_tp_tn_fp_fn(y_pred, y)
+            tp, tn, fp, fn = count_tp_tn_fp_fn(y_pred, y, output_type)
             total_tp += tp
             total_tn += tn
             total_fp += fp
@@ -119,7 +121,8 @@ def train(model: torch.nn.Module,
           sampler=None,
           early_stopping=None,
           checkpoint=None,
-          on_epoch_end=None) -> Dict[str, List]:
+          on_epoch_end=None,
+          output_type: str = 'logits') -> Dict[str, List]:
     """
     Trains and validates a PyTorch model.
 
@@ -140,17 +143,19 @@ def train(model: torch.nn.Module,
         if sampler is not None:
             sampler.set_epoch(epoch)
         train_loss, train_acc, train_apcer, train_bpcer = train_step(
-            model=model, 
+            model=model,
             dataloader=train_dataloader,
-            loss_fn=loss_fn, 
-            optimizer=optimizer, 
-            device=device
+            loss_fn=loss_fn,
+            optimizer=optimizer,
+            device=device,
+            output_type=output_type
         )
         val_loss, val_acc, val_apcer, val_bpcer = val_step(
-            model=model, 
+            model=model,
             dataloader=val_dataloader,
-            loss_fn=loss_fn, 
-            device=device
+            loss_fn=loss_fn,
+            device=device,
+            output_type=output_type
         )
 
         if scheduler:

@@ -3,4 +3,5 @@ exp2,1,10,/mnt3/repo_and_weights/runs/Exp2_dinov3_convnext_large_v1_512_ori,/mnt
 exp2point5,2,11,/mnt3/repo_and_weights/runs/Ex2_dinov3_convnext_large_v1_512_ori,/mnt3/repo_and_weights/runs/Ex2_dinov3_convnext_large_v1_512_crop
 exp3,21,7,/mnt3/repo_and_weights/runs/Ex3_dinov3_convnext_large_v1_512_ori_train_sampling,/mnt3/repo_and_weights/runs/Ex3_dinov3_convnext_large_v1_512_crop_train_sampling
 exp4,7,25,/mnt3/repo_and_weights/runs/Ex4_van_b0_legacy_512_ori,/mnt3/repo_and_weights/runs/Ex4_van_b0_legacy_512_crop
-exp5,,14,/mnt3/repo_and_weights/runs/Ex5_van_b1_legacy_v1_512_ori,/mnt3/repo_and_weights/runs/Ex5_van_b1_legacy_v1_512_crop
+exp5,15,14,/mnt3/repo_and_weights/runs/Ex5_van_b1_legacy_v1_512_ori,/mnt3/repo_and_weights/runs/Ex5_van_b1_legacy_v1_512_crop
+exp7,15,17,/mnt3/repo_and_weights/runs/Ex7_dinov3_convnext_small_v1_512_ori,/mnt3/repo_and_weights/runs/Ex7_dinov3_convnext_small_v1_512_crop

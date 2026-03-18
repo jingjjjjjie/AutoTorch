@@ -82,8 +82,8 @@ def main():
         sampler=train_sampler,
         early_stopping=early_stopping,
         checkpoint=checkpoint,
-        on_epoch_end=lambda history: save_at_epoch_end(cfg.run_dir, history),
         output_type=cfg.model.output_type,
+        on_epoch_end=lambda history: save_at_epoch_end(cfg.run_dir, history),
     )
     timer.record("training")
 

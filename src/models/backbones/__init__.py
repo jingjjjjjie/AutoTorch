@@ -3,11 +3,13 @@ Backbone model loaders and registry.
 '''
 from .dino import load_dino_model, WEIGHTS_MAP as DINO_MODELS
 from .van import load_van_model, WEIGHTS_MAP as VAN_MODELS
+from .unireplknet import load_unireplknet_model, WEIGHTS_MAP as UNIREPLKNET_MODELS
 
 # Model router: maps model name to loader function
 BACKBONE_LOADERS = {
     **{name: load_dino_model for name in DINO_MODELS},
     **{name: load_van_model for name in VAN_MODELS},
+    **{name: load_unireplknet_model for name in UNIREPLKNET_MODELS},
 }
 
 # 

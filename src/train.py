@@ -24,7 +24,7 @@ def main():
     timer = Timer()
 
     # Load config and extract values
-    cfg = get_config(name='train_van.yaml')
+    cfg = get_config(name='train_config.yaml')
 
     # Setup DDP
     local_rank = setup_ddp()

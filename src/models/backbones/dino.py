@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 
 REPO_DIR = '/mnt3/repo_and_weights/repo/dinov3'
-WEIGHTS_DIR = '/mnt3/repo_and_weights/weights'
+WEIGHTS_DIR = '/mnt3/repo_and_weights/weights/dinov3'
 
 sys.path.insert(0, REPO_DIR)
 

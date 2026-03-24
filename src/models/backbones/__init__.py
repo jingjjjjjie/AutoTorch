@@ -14,7 +14,6 @@ BACKBONE_LOADERS = {
     **{name: load_overlock_model for name in OVERLOCK_MODELS},
 }
 
-# 
 def load_backbone(model_name: str) -> tuple:
     """Load a backbone model by name, raises ValueError: If model_name is not recognized.
     Args:

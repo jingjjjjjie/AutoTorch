@@ -1,0 +1,22 @@
+services:
+  overlock:
+    build:
+      context: .
+      dockerfile: dockerfile
+    image: autotorch-overlock:latest
+    container_name: autotorch_overlock
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    volumes:
+      - ./src:/workspace/src
+      - /mnt3/repo_and_weights:/mnt3/repo_and_weights:ro
+    working_dir: /workspace
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

@@ -4,12 +4,11 @@ Model architectures and builders.
 import torch
 from .backbones import load_backbone, BACKBONE_LOADERS
 from .heads import build_head, HEAD_MAP
-from .architectures import CustomClassifierModel, OverLoCKClassifierModel
+from .architectures import CustomClassifierModel
 
 # Task -> Architecture mapping
 TASK_TO_ARCHITECTURE_MAP = {
-    'classification':         CustomClassifierModel,
-    'overlock_classification': OverLoCKClassifierModel,
+    'classification': CustomClassifierModel,
 }
 
 

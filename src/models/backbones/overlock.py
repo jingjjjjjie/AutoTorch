@@ -40,4 +40,8 @@ def load_overlock_model(model_name: str) -> tuple[nn.Module, int]:
     # Remove the classifier (head[-1]) — keep projection features (1024-d)
     model.head[-1] = nn.Identity()
 
+    # Delete aux_head (only used during training, not needed for backbone)
+    if hasattr(model, 'aux_head'):
+        del model.aux_head
+
     return model, OUTPUT_DIM[model_name]

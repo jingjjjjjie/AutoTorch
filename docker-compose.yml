@@ -6,13 +6,42 @@ services:
     image: autotorch-overlock:latest
     container_name: autotorch_overlock
     runtime: nvidia
+    shm_size: '16gb'
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - CUDA_VISIBLE_DEVICES=3
     volumes:
       - ./src:/workspace/src
-      - /mnt3/repo_and_weights:/mnt3/repo_and_weights:ro
-    working_dir: /workspace
+      - ./configs:/workspace/configs
+      - /mnt3:/mnt3
+      - /mnt4:/mnt4
+    working_dir: /workspace/src
+    command: torchrun --nproc_per_node=1 --master_port=29503 train.py
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  overlock2:
+    image: autotorch-overlock:latest
+    container_name: autotorch_overlock2
+    runtime: nvidia
+    shm_size: '16gb'
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - CUDA_VISIBLE_DEVICES=2
+    volumes:
+      - ./src:/workspace/src
+      - ./configs:/workspace/configs
+      - /mnt3:/mnt3
+      - /mnt4:/mnt4
+    working_dir: /workspace/src
+    command: torchrun --nproc_per_node=1 --master_port=29504 train.py
     deploy:
       resources:
         reservations:

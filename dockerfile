@@ -42,9 +42,9 @@ RUN pip install "setuptools==65.5.0" && \
     mmengine==0.2.0 \
     einops
 
-# Copy repo and test script
-COPY OverLoCK/ /workspace/OverLoCK/
-COPY test_forward.py /workspace/test_forward.py
+# Install project requirements
+COPY requirements.txt /workspace/requirements.txt
+RUN pip install -r requirements.txt
 
 # Verify imports (cuda will be False at build time, True at runtime with --gpus)
 RUN python -c "import torch; print('torch:', torch.__version__)" && \

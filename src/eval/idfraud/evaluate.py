@@ -5,7 +5,7 @@ import torch
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from data.idfraud.preprocessing import preprocess_csv, map_path_to_source
-from data.idfraud.transforms import get_transform
+from data.idfraud.transforms import build_transform
 from data.idfraud.dataset import IDFraudTorchDataset
 from models import build_model, load_weights_from_checkpoint
 from utils.device import is_main_process
@@ -53,10 +53,11 @@ def run_evaluation(cfg, device='cuda'):
     evaluation_df = map_path_to_source(evaluation_df, training_mode=False)
     
     device = torch.device(device if torch.cuda.is_available() else 'cpu')
-    transform = get_transform(
+    transform = build_transform(
         image_size=cfg.transform.image_size,
         normalize_mean=tuple(cfg.transform.normalize_mean),
-        normalize_std=tuple(cfg.transform.normalize_std))
+        normalize_std=tuple(cfg.transform.normalize_std),
+        version=cfg.transform.get('version', 'v1'))
     dataset = IDFraudTorchDataset(evaluation_df, transform=transform)
     dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory, persistent_workers=persistent_workers, prefetch_factor=prefetch_factor)
 

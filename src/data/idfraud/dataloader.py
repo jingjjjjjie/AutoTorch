@@ -3,7 +3,7 @@ Dataloader creation and dataset summary utilities.
 '''
 import pandas as pd
 from typing import List, Tuple
-from .transforms import get_transform
+from .transforms import build_transform
 from .dataset import IDFraudTorchDataset
 from utils.device import main_process_only
 from torch.utils.data import DataLoader, DistributedSampler
@@ -22,7 +22,8 @@ def create_dataloaders(image_type: str,
                        image_size: int,
                        normalize_mean: Tuple[float, ...],
                        normalize_std: Tuple[float, ...],
-                       sample_fraction: float = 1.0) -> Tuple[DataLoader, DataLoader, DistributedSampler, pd.DataFrame, pd.DataFrame]:
+                       sample_fraction: float = 1.0,
+                       transform_version: str = 'v1') -> Tuple[DataLoader, DataLoader, DistributedSampler, pd.DataFrame, pd.DataFrame]:
     """
     Calls to preprocess and transfrom data, then creates train and validation DataLoaders with DDP samplers.
 
@@ -45,7 +46,7 @@ def create_dataloaders(image_type: str,
         Tuple of (train_loader, valid_loader, train_sampler, df_train, df_val).
     """
 
-    transform = get_transform(image_size, normalize_mean, normalize_std)
+    transform = build_transform(image_size, normalize_mean, normalize_std, version=transform_version)
 
     # preprocess csv: takes in a list of csv(s) to train, check if the csv is valid and present in the system,
     #                 then concat to a single dataframe

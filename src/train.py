@@ -44,7 +44,8 @@ def main():
         image_size=cfg.transform.image_size,
         normalize_mean=tuple(cfg.transform.normalize_mean),
         normalize_std=tuple(cfg.transform.normalize_std),
-        sample_fraction=cfg.data.get('sample_fraction', 1.0))
+        sample_fraction=cfg.data.get('sample_fraction', 1.0),
+        transform_version=cfg.transform.get('version', 'v1'))
     timer.record("data_processing")
     
     # Build model and wrap with DDP

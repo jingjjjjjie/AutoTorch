@@ -17,8 +17,10 @@ def build_transform(image_size: int,
         return _get_transform(image_size, normalize_mean, normalize_std)
     elif version == 'v2':
         return _get_transform_v2(image_size, normalize_mean, normalize_std)
+    elif version == 'v3':
+        return _get_transform_v3(image_size, normalize_mean, normalize_std)
     else:
-        raise ValueError(f"Unknown transform version '{version}'. Supported: 'v1', 'v2'.")
+        raise ValueError(f"Unknown transform version '{version}'. Supported: 'v1', 'v2', 'v3'.")
 
 
 
@@ -71,6 +73,46 @@ def _get_transform_v2(image_size: int,
         v2.ToDtype(torch.float32, scale=True),
         v2.Normalize(mean=list(normalize_mean), std=list(normalize_std)),
     ])
+
+
+def _get_transform_v3(image_size: int,
+                     normalize_mean: Tuple[float, ...],
+                     normalize_std: Tuple[float, ...]) -> v2.Compose:
+    """Letterbox resize — scale to fit, zero-pad. No crop, no distortion.
+    Args:
+        image_size: Target size for resizing (square).
+        normalize_mean: Mean values for normalization (per channel).
+        normalize_std: Std values for normalization (per channel).
+    """
+    return v2.Compose([
+        v2.ToImage(),
+        _Letterbox(image_size),
+        v2.ToDtype(torch.float32, scale=True),
+        v2.Normalize(mean=list(normalize_mean), std=list(normalize_std)),
+    ])
+
+
+class _Letterbox:
+    """Scale image to fit inside target square, then zero-pad symmetrically."""
+    def __init__(self, target_size: int):
+        self.target_size = target_size
+
+    def __call__(self, image):
+        img_h, img_w = image.shape[-2], image.shape[-1]
+        scale = min(self.target_size / img_h, self.target_size / img_w)
+        new_h = int(img_h * scale)
+        new_w = int(img_w * scale)
+        image = TF.resize(image, [new_h, new_w], antialias=True)
+
+        pad_h = self.target_size - new_h
+        pad_w = self.target_size - new_w
+        pad_top    = pad_h // 2
+        pad_bottom = pad_h - pad_top
+        pad_left   = pad_w // 2
+        pad_right  = pad_w - pad_left
+        image = F.pad(image, [pad_left, pad_right, pad_top, pad_bottom],
+                      mode='constant', value=0)
+        return image
 
 
 # utility functions for _get_transform_v2

@@ -1,7 +1,7 @@
 """
 DDP Training Script
 Run with: CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=2 train.py
-test with: CUDA_VISIBLE_DEVICES=1 torchrun --nproc_per_node=1 train.py
+test with: CUDA_VISIBLE_DEVICES=2 torchrun --nproc_per_node=1 --master_port=29502 train.py
 """
 import sys 
 from pathlib import Path

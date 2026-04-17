@@ -2,16 +2,15 @@
 Dataloader creation and dataset summary utilities.
 '''
 import pandas as pd
-from typing import List, Tuple
+from typing import Tuple
 from .transforms import build_transform
 from .dataset import IDFraudTorchDataset
+from .preprocessing import split_data
 from utils.device import main_process_only
 from torch.utils.data import DataLoader, DistributedSampler
-from .preprocessing import preprocess_csv, split_data, map_path_to_source
 
 
-def create_dataloaders(image_type: str,
-                       train_batches: List[str],
+def create_dataloaders(train_csv: str,
                        train_val_split: float,
                        batch_size: int,
                        num_workers: int,
@@ -22,14 +21,16 @@ def create_dataloaders(image_type: str,
                        image_size: int,
                        normalize_mean: Tuple[float, ...],
                        normalize_std: Tuple[float, ...],
-                       sample_fraction: float = 1.0,
                        transform_version: str = 'v1') -> Tuple[DataLoader, DataLoader, DistributedSampler, pd.DataFrame, pd.DataFrame]:
     """
-    Calls to preprocess and transfrom data, then creates train and validation DataLoaders with DDP samplers.
+    Creates train and validation DataLoaders from a pre-built CSV with DDP samplers.
+
+    The CSV must have:
+        - 'path'  : absolute path to the image
+        - 'label' : integer label (0 = genuine, 1 = fraud)
 
     Args:
-        image_type: Type of image to load, supports 'crop' or 'ori' ONLY.
-        train_batches: List of batch identifiers to include in training.
+        train_csv: Path to training CSV (will be split into train/val).
         train_val_split: Fraction of data to use for training.
         batch_size: Number of samples per batch.
         num_workers: Number of worker processes for data loading.
@@ -40,33 +41,18 @@ def create_dataloaders(image_type: str,
         image_size: Target image size for resizing (square).
         normalize_mean: Mean values for normalization (per channel).
         normalize_std: Std values for normalization (per channel).
-        sample_fraction: Fraction of data to sample (default 1.0 for all data).
+        transform_version: Transform pipeline version ('v1', 'v2', 'v3').
 
     Returns:
         Tuple of (train_loader, valid_loader, train_sampler, df_train, df_val).
     """
-
     transform = build_transform(image_size, normalize_mean, normalize_std, version=transform_version)
 
-    # preprocess csv: takes in a list of csv(s) to train, check if the csv is valid and present in the system,
-    #                 then concat to a single dataframe
-    main_data = preprocess_csv(
-        image_type=image_type,
-        batch_list=train_batches,
-        sample_fraction=sample_fraction,
-        training_mode=True,
-    )
+    main_data = pd.read_csv(train_csv)
+    data_csv  = split_data(main_data, train_val_split=train_val_split)
 
-    # splits the data to train and validation splits(adds an additional column in the dataframe) 
-    data_csv = split_data(main_data, train_val_split=train_val_split)
-
-    # seperate the splits with the column created from split_data
     df_train = data_csv[data_csv['dataset_type'] == 'train'].reset_index(drop=True)
-    df_val = data_csv[data_csv['dataset_type'] == 'validation'].reset_index(drop=True)
-    
-    # resolve the image paths to actuall paths in our system
-    df_train = map_path_to_source(df_train, training_mode=True)
-    df_val = map_path_to_source(df_val, training_mode=True)
+    df_val   = data_csv[data_csv['dataset_type'] == 'validation'].reset_index(drop=True)
 
     # create datasets
     train_dataset = IDFraudTorchDataset(df_train, transform=transform)

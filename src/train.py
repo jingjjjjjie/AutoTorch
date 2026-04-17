@@ -32,8 +32,7 @@ def main():
 
     # Process data, get datasets and dataloaders
     train_loader, valid_loader, train_sampler, df_train, df_val = create_dataloaders(
-        image_type=cfg.data.image_type,
-        train_batches=cfg.data.train_batches,
+        train_csv=cfg.data.train_csv,
         train_val_split=cfg.data.train_val_split,
         batch_size=cfg.training.batch_size,
         num_workers=cfg.dataloader.num_workers,
@@ -44,7 +43,6 @@ def main():
         image_size=cfg.transform.image_size,
         normalize_mean=tuple(cfg.transform.normalize_mean),
         normalize_std=tuple(cfg.transform.normalize_std),
-        sample_fraction=cfg.data.get('sample_fraction', 1.0),
         transform_version=cfg.transform.get('version', 'v1'))
     timer.record("data_processing")
     

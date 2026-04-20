@@ -118,11 +118,11 @@ def _calculate_weighted_score(metrics_per_batch):
 
 
 def _evaluate_epoch(df, prob_col, threshold=0.5):
-    """Calculate metrics per original_batch_name for one epoch."""
+    """Calculate metrics per batch_name for one epoch."""
     metrics_per_batch = {}
 
-    for batch_name in df['original_batch_name'].unique():
-        batch_df = df[df['original_batch_name'] == batch_name]
+    for batch_name in df['batch_name'].unique():
+        batch_df = df[df['batch_name'] == batch_name]
         metrics = calculate_metrics(batch_df, prob_col, threshold)
         metrics_per_batch[batch_name] = metrics
 

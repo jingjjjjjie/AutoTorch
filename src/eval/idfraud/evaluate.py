@@ -4,7 +4,6 @@ import re
 import torch
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from data.idfraud.preprocessing import preprocess_csv, map_path_to_source
 from data.idfraud.transforms import build_transform
 from data.idfraud.dataset import IDFraudTorchDataset
 from models import build_model, load_weights_from_checkpoint
@@ -33,8 +32,7 @@ def run_evaluation(cfg, device='cuda'):
     save_dir = cfg.experiment.save_dir
     save_name = cfg.experiment.save_name
     run_dir = os.path.join(save_dir, save_name)
-    eval_batches = cfg.data.eval_batches
-    image_type = cfg.data.image_type
+    eval_csv = cfg.data.eval_csv
     batch_size = cfg.training.batch_size
     pin_memory = cfg.dataloader.pin_memory
     num_workers = cfg.dataloader.num_workers
@@ -48,9 +46,8 @@ def run_evaluation(cfg, device='cuda'):
     checkpoint_folder = os.path.join(run_dir, 'checkpoints')
     checkpoints = find_checkpoints(checkpoint_folder)
 
-    # Preprocess data
-    evaluation_df = preprocess_csv(image_type=image_type, batch_list=eval_batches, training_mode=False)
-    evaluation_df = map_path_to_source(evaluation_df, training_mode=False)
+    import pandas as pd
+    evaluation_df = pd.read_csv(eval_csv)
     
     device = torch.device(device if torch.cuda.is_available() else 'cpu')
     transform = build_transform(

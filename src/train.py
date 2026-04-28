@@ -82,6 +82,7 @@ def main():
         early_stopping=early_stopping,
         checkpoint=checkpoint,
         output_type=cfg.model.output_type,
+        accumulation_steps=cfg.training.get('grad_accumulation_steps', 1),
         on_epoch_end=lambda history: save_at_epoch_end(cfg.run_dir, history),
     )
     timer.record("training")

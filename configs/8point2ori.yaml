@@ -1,0 +1,58 @@
+experiment:
+  save_dir: /mnt3/repo_and_weights/runs2
+  save_name: Ex8point2_UniRepLKNet_T_legacy_v1_1024_ori
+  description: testing unireplknet t with exp5 (legacy settings) and 30 epochs
+model:
+  backbone_name: unireplknet_t
+  freeze_backbone: false
+  head_type: legacy_v2
+  output_type: probs
+training:
+  batch_size: 4
+  epochs: 30
+  learning_rate: 0.0001
+  loss_fn: bce
+  optimizer: adam
+  training_threshold: 0.5
+  weight_decay: 0
+  grad_accumulation_steps: 4
+early_stopping:
+  delta: 1.0e-07
+  enabled: true
+  patience: 12
+  verbose: true
+scheduler:
+  warmup_epochs: 0
+  decay_type: plateau
+  gamma: 0.1
+  step_size: 10
+  eta_min: 1.0e-07
+  patience: 5
+  factor: 0.5
+  min_lr: 1.0e-07
+  min_delta: 0.0001
+dataloader:
+  num_workers: 24
+  prefetch_factor: 10
+  pin_memory: true
+  non_blocking: true
+  persistent_workers: true
+  drop_last: true
+data:
+  image_type: ori
+  train_val_split: 0.9
+  train_csv: /home/jingjie/playground/Misc/[Autotorch]feat/Enhancement21v1_ori_train.csv
+  eval_csv: /home/jingjie/playground/Misc/[Autotorch]feat/Enhancement21_ori_eval.csv
+checkpoint:
+  enabled: true
+transform:
+  image_size: 1024
+  normalize_mean:
+  - 0.485
+  - 0.456
+  - 0.406
+  normalize_std:
+  - 0.229
+  - 0.224
+  - 0.225
+

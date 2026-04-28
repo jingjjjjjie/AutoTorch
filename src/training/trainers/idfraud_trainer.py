@@ -14,10 +14,11 @@ def train_step(model: torch.nn.Module,
                optimizer: torch.optim.Optimizer,
                device: torch.device,
                non_blocking: bool = True,
-               output_type: str = 'logits') -> Tuple[float, float, float, float]:
+               output_type: str = 'logits',
+               accumulation_steps: int = 1) -> Tuple[float, float, float, float]:
     """
     Trains a PyTorch model for a single epoch.
-    
+
     Returns:
     A tuple of (train_loss, train_acc, train_apcer, train_bpcer).
     """
@@ -29,6 +30,8 @@ def train_step(model: torch.nn.Module,
     total_tp, total_tn, total_fp, total_fn = 0, 0, 0, 0
     num_batches = len(dataloader)
 
+    optimizer.zero_grad()  # start each epoch with clean gradients
+
     for batch_idx, (X, y) in enumerate(dataloader):
         X, y = X.to(device, non_blocking=non_blocking), \
                y.to(device, non_blocking=non_blocking)
@@ -37,9 +40,14 @@ def train_step(model: torch.nn.Module,
         loss = loss_fn(y_pred, y.float())
         train_loss += loss.item()
 
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        # scale loss down so that gradients from N batches sum to the same
+        # magnitude as a single batch -- simulates a larger effective batch size
+        (loss / accumulation_steps).backward()
+
+        # update weights every N batches (or on the last batch of the epoch)
+        if (batch_idx + 1) % accumulation_steps == 0 or (batch_idx + 1) == num_batches:
+            optimizer.step()
+            optimizer.zero_grad()  # reset for the next accumulation window
 
         tp, tn, fp, fn = count_tp_tn_fp_fn(y_pred, y, output_type)
         total_tp += tp
@@ -122,7 +130,8 @@ def train(model: torch.nn.Module,
           early_stopping=None,
           checkpoint=None,
           on_epoch_end=None,
-          output_type: str = 'logits') -> Dict[str, List]:
+          output_type: str = 'logits',
+          accumulation_steps: int = 1) -> Dict[str, List]:
     """
     Trains and validates a PyTorch model.
 
@@ -148,7 +157,8 @@ def train(model: torch.nn.Module,
             loss_fn=loss_fn,
             optimizer=optimizer,
             device=device,
-            output_type=output_type
+            output_type=output_type,
+            accumulation_steps=accumulation_steps,
         )
         val_loss, val_acc, val_apcer, val_bpcer = val_step(
             model=model,

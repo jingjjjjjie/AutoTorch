@@ -37,6 +37,26 @@ class LegacyIdFraudHeadv1(nn.Module):
     def forward(self, x):
         return self.fc(x)
     
+class LegacyIdFraudHeadv2(nn.Module):
+    def __init__(self, in_features):
+        super().__init__()
+
+        self.fc = nn.Sequential(            
+            nn.Linear(in_features, 256),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.3),
+
+            nn.Linear(256, 256),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.1),
+
+            nn.Linear(256, 1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        return self.fc(x)
+    
 class LegacyIDFraudHead(nn.Module):
     def __init__(self, hidden):
         super().__init__()

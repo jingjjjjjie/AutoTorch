@@ -81,7 +81,7 @@ def create_dataloaders(train_csv: str,
         pin_memory=pin_memory,
         persistent_workers=persistent_workers,
         prefetch_factor=prefetch_factor,
-        drop_last=drop_last
+        drop_last=False
     )
 
     # print the dataset summary

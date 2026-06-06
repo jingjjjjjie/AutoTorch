@@ -93,7 +93,7 @@ def main():
     timer.record("evaluation")
 
     # Save results-log.csv, update configs, plots, and final model
-    save_after_training(cfg.run_dir, ddp_model=ddp_model, save_name=cfg.experiment.save_name, timer=timer)
+    save_after_training(cfg.run_dir, ddp_model=ddp_model, save_name=cfg.experiment.save_name, timer=timer, results=results)
 
     cleanup_ddp()
 

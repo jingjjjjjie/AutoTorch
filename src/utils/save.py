@@ -66,10 +66,11 @@ def save_at_epoch_end(run_dir: str,
 
 
 @main_process_only
-def save_after_training(run_dir: str, 
-                        ddp_model: torch.nn.Module, 
-                        save_name: str, 
-                        timer: Timer) -> None:
+def save_after_training(run_dir: str,
+                        ddp_model: torch.nn.Module,
+                        save_name: str,
+                        timer: Timer,
+                        results: Dict[str, List] = None) -> None:
     """
     Saves final model's state dict and elasped time information after training completes.
 
@@ -78,12 +79,22 @@ def save_after_training(run_dir: str,
         ddp_model: DDP-wrapped model (will be unwrapped via .module).
         save_name: The experiment name (defined in train_config)
         timer: Optional Timer object to record timing info in config.
+        results: Training results dictionary with per-epoch metrics and timing.
     """
     # Update config with timing if available
-    
     config_path = os.path.join(run_dir, 'config.yaml')
     save_cfg = OmegaConf.load(config_path)
     save_cfg.timing = timer.summary()
+
+    # Add first epoch training speed if available
+    if results and "train_time_s" in results and len(results["train_time_s"]) > 0:
+        first_epoch_train_time = results["train_time_s"][0]
+        save_cfg.timing.first_epoch_train_time_s = first_epoch_train_time
+
+    if results and "epoch_time_s" in results and len(results["epoch_time_s"]) > 0:
+        first_epoch_total_time = results["epoch_time_s"][0]
+        save_cfg.timing.first_epoch_total_time_s = first_epoch_total_time
+
     with open(config_path, 'w') as f:
         f.write(OmegaConf.to_yaml(save_cfg))
 

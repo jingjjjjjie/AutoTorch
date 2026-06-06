@@ -2,6 +2,7 @@
 Contains functions for training and validating a PyTorch model.
 """
 import torch
+import time
 from tqdm import tqdm
 from typing import Dict, List, Tuple
 from utils.device import is_main_process
@@ -142,15 +143,19 @@ def train(model: torch.nn.Module,
     results = {
         "train_loss": [], "train_acc": [], "train_apcer": [], "train_bpcer": [],
         "val_loss": [], "val_acc": [], "val_apcer": [], "val_bpcer": [],
-        "lr": []
+        "lr": [],
+        "epoch_time_s": [], "train_time_s": [], "val_time_s": []
     }
 
     model.to(device)
 
     for epoch in tqdm(range(epochs), disable=not is_main_process()):
+        epoch_start = time.time()
         # Set epoch for distributed sampler (ensures proper shuffling)
         if sampler is not None:
             sampler.set_epoch(epoch)
+
+        train_start = time.time()
         train_loss, train_acc, train_apcer, train_bpcer = train_step(
             model=model,
             dataloader=train_dataloader,
@@ -160,6 +165,9 @@ def train(model: torch.nn.Module,
             output_type=output_type,
             accumulation_steps=accumulation_steps,
         )
+        train_time = time.time() - train_start
+
+        val_start = time.time()
         val_loss, val_acc, val_apcer, val_bpcer = val_step(
             model=model,
             dataloader=val_dataloader,
@@ -167,6 +175,7 @@ def train(model: torch.nn.Module,
             device=device,
             output_type=output_type
         )
+        val_time = time.time() - val_start
 
         if scheduler:
             scheduler.step(metric=val_loss)
@@ -174,6 +183,12 @@ def train(model: torch.nn.Module,
         # Track current learning rate
         current_lr = optimizer.param_groups[0]['lr']
         results["lr"].append(current_lr)
+
+        # Calculate epoch time
+        epoch_time = time.time() - epoch_start
+        results["epoch_time_s"].append(epoch_time)
+        results["train_time_s"].append(train_time)
+        results["val_time_s"].append(val_time)
 
         if is_main_process():
             print(
@@ -185,7 +200,8 @@ def train(model: torch.nn.Module,
                 f"val_loss: {val_loss:.4f} | "
                 f"val_acc: {val_acc:.4f} | "
                 f"val_apcer: {val_apcer:.4f} | "
-                f"val_bpcer: {val_bpcer:.4f}"
+                f"val_bpcer: {val_bpcer:.4f} | "
+                f"time: {train_time:.2f}s train + {val_time:.2f}s val = {epoch_time:.2f}s total"
             )
         results["train_loss"].append(train_loss)
         results["train_acc"].append(train_acc)

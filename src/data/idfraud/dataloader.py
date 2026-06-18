@@ -5,13 +5,12 @@ import pandas as pd
 from typing import Tuple
 from .transforms import build_transform
 from .dataset import IDFraudTorchDataset
-from .preprocessing import split_data
 from utils.device import main_process_only
 from torch.utils.data import DataLoader, DistributedSampler
 
 
 def create_dataloaders(train_csv: str,
-                       train_val_split: float,
+                       val_csv: str,
                        batch_size: int,
                        num_workers: int,
                        prefetch_factor: int,
@@ -23,15 +22,15 @@ def create_dataloaders(train_csv: str,
                        normalize_std: Tuple[float, ...],
                        transform_version: str = 'v1') -> Tuple[DataLoader, DataLoader, DistributedSampler, pd.DataFrame, pd.DataFrame]:
     """
-    Creates train and validation DataLoaders from a pre-built CSV with DDP samplers.
+    Creates train and validation DataLoaders from separate pre-built CSVs with DDP samplers.
 
-    The CSV must have:
+    Each CSV must have:
         - 'path'  : absolute path to the image
         - 'label' : integer label (0 = genuine, 1 = fraud)
 
     Args:
-        train_csv: Path to training CSV (will be split into train/val).
-        train_val_split: Fraction of data to use for training.
+        train_csv: Path to training CSV.
+        val_csv: Path to validation CSV.
         batch_size: Number of samples per batch.
         num_workers: Number of worker processes for data loading.
         prefetch_factor: Number of batches to prefetch per worker.
@@ -48,11 +47,8 @@ def create_dataloaders(train_csv: str,
     """
     transform = build_transform(image_size, normalize_mean, normalize_std, version=transform_version)
 
-    main_data = pd.read_csv(train_csv)
-    data_csv  = split_data(main_data, train_val_split=train_val_split)
-
-    df_train = data_csv[data_csv['dataset_type'] == 'train'].reset_index(drop=True)
-    df_val   = data_csv[data_csv['dataset_type'] == 'validation'].reset_index(drop=True)
+    df_train = pd.read_csv(train_csv)
+    df_val   = pd.read_csv(val_csv)
 
     # create datasets
     train_dataset = IDFraudTorchDataset(df_train, transform=transform)

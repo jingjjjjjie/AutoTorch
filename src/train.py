@@ -3,7 +3,8 @@ DDP Training Script
 Run with: CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=2 train.py
 test with: CUDA_VISIBLE_DEVICES=2 torchrun --nproc_per_node=1 --master_port=29502 train.py
 """
-import sys 
+import sys
+import argparse
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -21,10 +22,14 @@ from utils.device import setup_ddp, wrap_model_ddp, cleanup_ddp
 from models import build_model
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", default="train_config.yaml")
+    args, _ = parser.parse_known_args()
+
     timer = Timer()
 
     # Load config and extract values
-    cfg = get_config(name='train_config.yaml')
+    cfg = get_config(name=args.config)
 
     # Setup DDP
     local_rank = setup_ddp()

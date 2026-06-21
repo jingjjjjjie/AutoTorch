@@ -12,8 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.timer import Timer
 from utils.config import get_config
 from data.idfraud import create_dataloaders
-from eval.idfraud.evaluate import run_evaluation
-from eval.idfraud.leaderboard import create_leaderboard
+from eval.idfraud.model_selection import select_best_checkpoint
 from training.trainers import idfraud_trainer
 from training.callbacks import build_checkpoint, build_early_stopping
 from training import build_loss_fn, build_optimizer, build_lr_scheduler
@@ -38,7 +37,7 @@ def main():
     # Process data, get datasets and dataloaders
     train_loader, valid_loader, train_sampler, df_train, df_val = create_dataloaders(
         train_csv=cfg.data.train_csv,
-        train_val_split=cfg.data.train_val_split,
+        val_csv=cfg.data.val_csv,
         batch_size=cfg.training.batch_size,
         num_workers=cfg.dataloader.num_workers,
         prefetch_factor=cfg.dataloader.prefetch_factor,
@@ -92,9 +91,8 @@ def main():
     )
     timer.record("training")
 
-    # Run evaluation --> generates a dataframe containing predictions from all epochs
-    run_evaluation(cfg)
-    create_leaderboard(cfg)
+    # Select best checkpoint from per-epoch val APCER/BPCER
+    select_best_checkpoint(results, cfg.run_dir, far_threshold=cfg.training.get('far_threshold', 0.02))
     timer.record("evaluation")
 
     # Save results-log.csv, update configs, plots, and final model

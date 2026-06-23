@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.timer import Timer
 from utils.config import get_config
 from data.idfraud import create_dataloaders
-from eval.idfraud.model_selection import select_best_checkpoint
+from model_selection import select_best_checkpoint
 from training.trainers import idfraud_trainer
 from training.callbacks import build_checkpoint, build_early_stopping
 from training import build_loss_fn, build_optimizer, build_lr_scheduler
@@ -49,7 +49,7 @@ def main():
         normalize_std=tuple(cfg.transform.normalize_std),
         transform_version=cfg.transform.get('version', 'v1'))
     timer.record("data_processing")
-    
+
     # Build model and wrap with DDP
     model = build_model(
         model_name=cfg.model.backbone_name,
@@ -73,7 +73,7 @@ def main():
     save_before_training(cfg, cfg.run_dir, df_train, df_val)
 
     # Train using idfraud_trainer
-    results = idfraud_trainer.train(
+    idfraud_trainer.train(
         model=ddp_model,
         train_dataloader=train_loader,
         val_dataloader=valid_loader,
@@ -92,15 +92,13 @@ def main():
     timer.record("training")
 
     # Select best checkpoint from per-epoch val APCER/BPCER
-    select_best_checkpoint(results, cfg.run_dir, far_threshold=cfg.training.get('far_threshold', 0.02))
+    select_best_checkpoint(cfg.run_dir, far_threshold=cfg.training.get('far_threshold', 0.02))
     timer.record("evaluation")
 
-    # Save results-log.csv, update configs, plots, and final model
+    # update configs, plots, and final model
     save_after_training(cfg.run_dir, ddp_model=ddp_model, save_name=cfg.experiment.save_name, timer=timer)
 
     cleanup_ddp()
 
 if __name__ == "__main__":
     main()
-  
-    

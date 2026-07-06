@@ -2,6 +2,7 @@
 Save training artifacts: config, data splits, logs, plots, model.
 '''
 import os
+import subprocess
 import torch
 import pandas as pd
 from pathlib import Path
@@ -10,6 +11,19 @@ from typing import Dict, List
 from .plots import plot_results
 from utils.device import main_process_only
 from omegaconf import OmegaConf, DictConfig
+
+
+def get_git_commit_hash() -> str:
+    """Return the current Git commit hash, or 'unknown' if unavailable."""
+    try:
+        return subprocess.check_output(
+            ['git', 'rev-parse', 'HEAD'],
+            cwd=Path(__file__).resolve().parents[2],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return 'unknown'
 
 
 @main_process_only
@@ -37,6 +51,7 @@ def save_before_training(cfg: DictConfig,
     os.makedirs(save_dataframe_dir, exist_ok=True)
 
     # write config to the run directory
+    cfg.git_commit_hash = get_git_commit_hash()
     with open(os.path.join(run_dir, save_config_name), 'w') as f:
         f.write(OmegaConf.to_yaml(cfg))
 

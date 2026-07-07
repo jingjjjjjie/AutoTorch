@@ -12,6 +12,10 @@ runs/
 **/playground.ipynb
 playground/
 
+# Feature visualization local artifacts
+feature_visualization/output/
+feature_visualization/vendor/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

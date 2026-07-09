@@ -1,4 +1,4 @@
-"""Export UniRepLKNet-T embeddings to a CSV for interactive visualization."""
+"""Export AutoTorch embeddings to a CSV for interactive visualization."""
 from __future__ import annotations
 
 import argparse
@@ -89,7 +89,7 @@ def batched_features(
     predictions_by_index: dict[int, float] = {}
 
     with torch.inference_mode():
-        for images, indexes in tqdm(loader, desc="Extracting UniRepLKNet-T features"):
+        for images, indexes in tqdm(loader, desc="Extracting features"):
             images = images.to(device, non_blocking=True)
             batch_features_tensor = feature_extractor(images)
             batch_outputs = model.mlp_head(batch_features_tensor).squeeze(1)
@@ -143,6 +143,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--csv", required=True, type=Path, help="Input CSV containing image paths and metadata.")
     parser.add_argument("--checkpoint", required=True, type=Path, help="Trained AutoTorch model checkpoint.")
     parser.add_argument("--output", required=True, type=Path, help="Output feature CSV path.")
+    parser.add_argument("--model-name", default="unireplknet_t", help="Backbone name passed to AutoTorch build_model.")
     parser.add_argument("--image-column", default="path", help="Column containing image paths.")
     parser.add_argument("--label-column", default="label", help="Metadata label column to validate and preserve.")
     parser.add_argument("--head-type", default="legacy_v2", help="Classifier head used by the checkpoint.")
@@ -176,7 +177,7 @@ def main() -> None:
 
     device = torch.device(args.device)
     model = build_model(
-        model_name="unireplknet_t",
+        model_name=args.model_name,
         device=device,
         task="classification",
         head_type=args.head_type,

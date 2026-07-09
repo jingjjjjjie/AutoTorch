@@ -12,7 +12,7 @@ The workflow is intentionally CSV-first:
 
 Each row is one item/sample/image. Minimum columns:
 
-- One or more numeric feature columns. By convention the extractor writes `feature_0000` ... `feature_0639`.
+- One or more numeric feature columns prefixed with `feature_`. By convention the extractor writes `feature_0000` ... `feature_0639`.
 - At least one categorical column for grouping, for example `label`, `source`, `batch`, `sample_type`, or `class`.
 
 Recommended columns:
@@ -80,11 +80,14 @@ streamlit run feature_visualization/app.py
 
 Upload a feature CSV in the sidebar. The app supports:
 
-- PCA or t-SNE projections.
+- PCA, t-SNE, UMAP, or LDA projections.
+- Automatic feature-column detection by prefix, without showing hundreds of feature columns in the sidebar.
 - Toggle/filter any categorical class or batch column.
 - Merge classes using explicit rules such as `colour printed=collected colour printed,printed colour prod`.
 - Color, symbol, and facet controls for different metadata views.
 - Minimal point hover with image preview from the item inspector when a valid image path column is available.
+
+LDA uses the active merged class labels as the supervised target, so merge rules and filters are applied before fitting. For two-class selections, LDA has one discriminant axis and the app plots the second axis at zero.
 
 ## Merge Mapping Format
 

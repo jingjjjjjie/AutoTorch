@@ -12,6 +12,7 @@ The sidebar `Page` selector contains:
 
 - `Image review`: prepared artifact gallery for predictions, prepared Grad-CAMs, filters, and failure buckets.
 - `Feature space`: embedding/projection explorer.
+- `Launch workspace`: settings-driven model-specific viewer clones such as VAN Small or UniRepLKNet workspaces.
 - `Settings`: prediction CSV and model artifact configuration.
 
 ## Settings
@@ -92,6 +93,36 @@ Existing feature CSVs are stored under:
 ```text
 advanced_visualization/output/
 ```
+
+## Launchable Workspaces
+
+Model-specific viewer clones are launched from `Launch workspace`.
+Supported model types are configured in `advanced_visualization/settings.json`
+under `extra_view_configs`.
+
+Each config defines:
+
+- model type
+- branches, such as crop/ori/image
+- available Grad-CAM layers
+- Grad-CAM path column template or explicit column candidates
+- default layer and prediction columns
+
+This is artifact-first. New model families normally do not need new Streamlit
+code if they export a prepared CSV with image paths, predictions, optional
+`feature_0000...` columns, and PNG explanation path columns. Add or edit an
+`extra_view_configs` entry when the model needs a different number of Grad-CAM
+layers or branches.
+
+Each launched workspace provides its own model-specific clone of:
+
+- image review
+- feature-space projection
+- configured layered Grad-CAM inspection
+
+The launcher opens workspaces through a query-param URL in a new tab, so the
+launched workspace is independent from the current app page and does not change
+the main viewer's selected page.
 
 ## Lower-Level Commands
 

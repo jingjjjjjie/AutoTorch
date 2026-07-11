@@ -1,17 +1,86 @@
 # Adding Models to Advanced Visualization
 
-This guide explains what must exist before a model can run through the
-advanced visualization preparation pipeline.
+This guide explains how new models plug into AutoTorch advanced visualization.
+
+The long-term design is artifact-first. The viewer can support almost any model
+family if the model owner exports a compatible artifact:
+
+- a prepared CSV with image paths, labels, predictions, and metadata;
+- optional numeric feature columns named `feature_0000`, `feature_0001`, etc.;
+- Grad-CAM or explanation image path columns;
+- an `extra_view_configs` entry when the model needs model-specific layer or
+  branch controls.
+
+Model-specific Python code is only required when AutoTorch itself must load the
+model and generate predictions, features, or Grad-CAM. If another infra already
+exports the artifact, use `model_type: artifact_only` and configure the extra
+view from settings.
 
 ## Current Support
 
-The current pipeline supports PyTorch models that can be loaded by AutoTorch.
-The Streamlit viewer itself is artifact-first: it reads prepared CSVs, feature
-columns, manifests, and Grad-CAM image files.
+The Streamlit viewer is artifact-first: it reads prepared CSVs, feature columns,
+manifests, and Grad-CAM image files. The model framework can be PyTorch,
+TensorFlow, Keras, ONNX, or something else, as long as the exported artifact
+matches the viewer schema.
 
-It does not currently support TensorFlow or Keras models. TensorFlow support
-would need a new model adapter layer for loading, preprocessing, inference,
-feature extraction, and saliency/Grad-CAM generation.
+The AutoTorch preparation pipeline supports PyTorch models that can be loaded by
+AutoTorch. This is the path used when AutoTorch performs feature extraction and
+Grad-CAM generation itself.
+
+AutoTorch does not need TensorFlow/Keras runtime support for artifact-only
+TensorFlow models. TensorFlow support is only needed if AutoTorch is expected to
+load TensorFlow models directly.
+
+## Universal Artifact Contract
+
+Any model can be visualized if it exports a CSV with the following practical
+shape:
+
+```text
+uuid or item_id
+label
+one or more image path columns
+one numeric prediction column
+optional metadata columns
+optional feature_0000...feature_N columns
+optional Grad-CAM/explanation PNG path columns
+```
+
+Recommended column conventions:
+
+- Image columns: `absolute_ori_path`, `absolute_ocr_path`, `image_path`, `path`.
+- Prediction columns: include `pred`, `prob`, `score`, or `result` in the name.
+- Feature columns: `feature_0000`, `feature_0001`, ...
+- Explanation columns: direct PNG paths, for example
+  `tf_crop_norm3_logit_gradcam_path`.
+
+If the CSV follows this contract:
+
+- `Image review` can browse images, predictions, failures, filters, and prepared
+  Grad-CAMs.
+- `Feature space` can project any numeric `feature_...` columns.
+- `Launch workspace` can render model-specific viewer clones configured in
+  `extra_view_configs`.
+
+## What Changes Per Model
+
+For artifact-only models, the model differences are mostly configuration:
+
+- branches, such as `image`, `crop`, `ori`, `front`, `back`;
+- Grad-CAM/explanation layers;
+- Grad-CAM path column template;
+- default layer;
+- prediction and metadata column candidates.
+
+These are configured in:
+
+```text
+advanced_visualization/settings.json
+extra_view_configs
+```
+
+In most cases, adding a new artifact-only model should not require new Python
+code.
 
 ## Pipeline Expectations
 
@@ -94,8 +163,15 @@ Case 3.
 
 ## Case 3: New Visualization Model Family
 
-Create a new model-specific engine when the new model needs different loading,
-target-layer selection, score logic, CAM computation, or feature extraction.
+Create a new model-specific engine only when AutoTorch needs to load the model
+and generate artifacts itself.
+
+If the model's own infra exports a prepared CSV, features, and explanation PNG
+paths, skip this section and use `artifact_only` plus `extra_view_configs`.
+
+When AutoTorch must generate artifacts, create a new model-specific engine when
+the new model needs different loading, target-layer selection, score logic, CAM
+computation, or feature extraction.
 
 Add:
 
@@ -165,7 +241,8 @@ python advanced_visualization/cli/prepare_all.py --model-key my_model --skip-fea
 
 ## TensorFlow Support Requirements
 
-TensorFlow is not supported by the current codebase because:
+Direct TensorFlow model loading is not supported by the current AutoTorch
+pipeline because:
 
 - project training and inference code imports PyTorch modules;
 - checkpoints are loaded with `torch.load`;
@@ -173,8 +250,8 @@ TensorFlow is not supported by the current codebase because:
 - Grad-CAM hooks use PyTorch forward/backward hooks;
 - feature extraction calls PyTorch-specific attributes.
 
-To support TensorFlow models, add a framework-neutral adapter interface first.
-The adapter should provide:
+To support TensorFlow models directly inside AutoTorch, add a framework-neutral
+adapter interface first. The adapter should provide:
 
 - model loading from TensorFlow checkpoint or SavedModel;
 - image preprocessing compatible with the trained TensorFlow model;
@@ -185,6 +262,10 @@ The adapter should provide:
 
 After that, the pipeline can route PyTorch models to the existing path and
 TensorFlow models to the TensorFlow adapter.
+
+For normal visualization usage, prefer artifact-only TensorFlow integration:
+run TensorFlow inference and Grad-CAM in the TensorFlow infra, export the CSV and
+PNG paths, and let AutoTorch read the artifact.
 
 ## Comfortable TensorFlow Workaround: Artifact-Only Integration
 
@@ -330,3 +411,124 @@ This keeps the infrastructure clean:
 - AutoTorch visualization owns browsing, filtering, failure buckets, feature
   projection, and image comparison.
 - No TensorFlow dependency is needed in the AutoTorch Streamlit runtime.
+
+## Launchable Workspaces
+
+Model-specific inspection tools should be added through the workspace launcher,
+not by adding model-specific controls to the general image review.
+
+Current launcher entry:
+
+```text
+advanced_visualization/views/launcher.py
+```
+
+Current workspace composer:
+
+```text
+advanced_visualization/views/extra_views/workspace.py
+```
+
+Current extra-view registry:
+
+```text
+advanced_visualization/views/extra_views/registry.py
+```
+
+Current generic layered Grad-CAM implementation used inside each workspace:
+
+```text
+advanced_visualization/views/extra_views/layered_gradcam.py
+```
+
+Extra views are configured in `advanced_visualization/settings.json` under:
+
+```text
+extra_view_configs
+```
+
+The default supported model types are:
+
+```text
+vansmall
+unireplknet
+```
+
+Each config defines branches, layers, and a Grad-CAM path column template. For
+example, the VAN Small config uses:
+
+```text
+tf_{branch}_{layer}_{score}_gradcam_path
+```
+
+Generic config shape:
+
+```json
+{
+  "model_type": "my_model",
+  "label": "My Model Grad-CAM Review",
+  "description": "Layered explanation review for My Model artifacts.",
+  "view": "layered_gradcam",
+  "score": "logit",
+  "column_template": "my_{branch}_{layer}_{score}_gradcam_path",
+  "required_columns": [
+    "my_image_stage4_logit_gradcam_path"
+  ],
+  "branches": [
+    {
+      "key": "image",
+      "label": "Image",
+      "image_candidates": ["image_path", "absolute_ori_path", "path"]
+    }
+  ],
+  "layers": [
+    {"key": "stage3", "label": "stage3"},
+    {"key": "stage4", "label": "stage4"}
+  ],
+  "default_layer": "stage4",
+  "prediction_candidates": ["my_pred", "pred", "score"],
+  "metadata_columns": ["Recapture_Subclass", "Quality_Issue"]
+}
+```
+
+The layered view dynamically builds its layer controls from this config. A model
+with one layer and a model with ten layers use the same view code.
+
+Each launched workspace provides:
+
+- its own image review over the selected CSV/artifact;
+- its own feature-space projection over the same CSV/artifact;
+- its own configured layered Grad-CAM inspection.
+
+The launcher generates a query-param URL and opens the workspace in a new tab.
+This keeps the launched model-specific workspace independent from the main app
+page/session state.
+
+The VAN Small workspace expects the TensorFlow exporter to provide at least:
+
+```text
+tf_crop_norm3_logit_gradcam_path
+tf_ori_norm3_logit_gradcam_path
+```
+
+Optional VAN Small layer comparison columns:
+
+```text
+tf_crop_block3_3_logit_gradcam_path
+tf_ori_block3_3_logit_gradcam_path
+tf_crop_block4_1_logit_gradcam_path
+tf_ori_block4_1_logit_gradcam_path
+tf_crop_norm4_logit_gradcam_path
+tf_ori_norm4_logit_gradcam_path
+tf_crop_layer_montage_path
+tf_ori_layer_montage_path
+```
+
+Use:
+
+```bash
+streamlit run advanced_visualization/unified_app.py
+```
+
+Then open `Launch workspace`, select the prepared CSV/artifact source, and
+choose the configured model type and workspace.

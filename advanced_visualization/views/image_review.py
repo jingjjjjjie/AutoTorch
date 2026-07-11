@@ -39,22 +39,17 @@ if os.environ.get("AUTOTORCH_EMBEDDED_STREAMLIT") != "1":
         initial_sidebar_state="expanded",
     )
 
-def main() -> None:
+def render_loaded_data(df, title: str = "Advanced Visualization", subtitle: str = "Bottomless image review for subclass patterns, confidence failures, and Grad-CAM comparison.") -> None:
     inject_css()
     st.markdown(
-        """
+        f"""
         <div class="app-hero">
-          <h1>Advanced Visualization</h1>
-          <p>Bottomless image review for subclass patterns, confidence failures, and Grad-CAM comparison.</p>
+          <h1>{title}</h1>
+          <p>{subtitle}</p>
         </div>
         """,
         unsafe_allow_html=True,
     )
-
-    df = load_data()
-    if df is None:
-        st.info("Upload a CSV or configure the prediction CSV and model artifacts in Settings.")
-        return
 
     controls = sidebar_controls(df)
     filtered = apply_all_filters(df, controls, caption=st.sidebar.caption, include_gradcam=controls["only_prepared_gradcam"])
@@ -74,6 +69,16 @@ def main() -> None:
         start, end = render_pager(len(filtered), controls["page_size"])
         page_df = add_gradcam_columns(filtered.iloc[start:end], controls, caption=st.sidebar.caption)
         render_grid(page_df, controls, start_index=start + 1)
+
+
+def main() -> None:
+    inject_css()
+    df = load_data()
+    if df is None:
+        st.info("Upload a CSV or configure the prediction CSV and model artifacts in Settings.")
+        return
+
+    render_loaded_data(df)
 
 
 if __name__ == "__main__":

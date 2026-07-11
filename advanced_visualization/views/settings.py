@@ -1,6 +1,8 @@
 """Settings page for prediction CSV and model run definitions."""
 from __future__ import annotations
 
+import json
+
 import pandas as pd
 import streamlit as st
 
@@ -247,6 +249,25 @@ def _render_review_settings(settings: UserSettings) -> dict:
     }
 
 
+def _render_extra_view_configs(settings: UserSettings) -> list[dict]:
+    st.subheader("Workspace Configs")
+    st.caption("Defines model-specific launchable workspaces, branches, layers, and Grad-CAM path column templates.")
+    raw = st.text_area(
+        "Workspace configs JSON",
+        value=json.dumps(settings.extra_view_configs, indent=2),
+        height=360,
+    )
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        st.warning(f"Workspace configs JSON is invalid: {exc}")
+        return settings.extra_view_configs
+    if not isinstance(parsed, list):
+        st.warning("Workspace configs must be a JSON list.")
+        return settings.extra_view_configs
+    return [item for item in parsed if isinstance(item, dict)]
+
+
 def _validate(settings: UserSettings) -> list[str]:
     errors: list[str] = []
     if settings.prediction_csv and not configured_path(settings.prediction_csv).is_file():
@@ -294,6 +315,7 @@ def main() -> None:
     prediction_csv = st.text_input("Prediction CSV", value=current.prediction_csv)
     review = _render_review_settings(current)
     models = _render_model_editor(current)
+    extra_view_configs = _render_extra_view_configs(current)
     next_settings = UserSettings(
         prediction_csv=prediction_csv.strip(),
         manifest_name=current.manifest_name,
@@ -308,6 +330,7 @@ def main() -> None:
         review=review,
         model_type_options=current.model_type_options,
         image_size_options=current.image_size_options,
+        extra_view_configs=extra_view_configs,
         pipeline=current.pipeline,
         models=models,
     )

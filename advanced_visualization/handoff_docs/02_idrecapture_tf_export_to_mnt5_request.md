@@ -202,6 +202,25 @@ absolute_ocr_path <- resolved ocr_path
 
 AutoTorch visualization wants viewable PNG overlays, not raw `.npy` heatmaps.
 
+For VAN Small, use pre-sigmoid logit as the Grad-CAM score. Do not use
+post-sigmoid probability for Grad-CAM because Ench21 VAN Small predictions can
+saturate at probability `1.0`, making sigmoid gradients uninformative.
+
+Production default:
+
+```text
+score: pre-sigmoid logit
+main layer: norm3
+```
+
+Optional expert comparison layers:
+
+```text
+block3.3
+block4.1
+norm4
+```
+
 Convert each heatmap to an overlay PNG on top of the corresponding image:
 
 ```text
@@ -209,7 +228,7 @@ Convert each heatmap to an overlay PNG on top of the corresponding image:
 /mnt5/temp_jj/idrecapture_autotorch_viz/idrecapture_ench21/<dataset>/gradcam/<uuid_or_stem>_crop_gradcam.png
 ```
 
-Then write absolute PNG paths into:
+For the general image viewer, write the production default PNG paths into:
 
 ```text
 tf_ori_gradcam_path
@@ -217,6 +236,33 @@ tf_crop_gradcam_path
 ```
 
 The AutoTorch viewer can then select either column as the Grad-CAM path column.
+
+AutoTorch has a settings-driven `Launch workspace` page. For the configured
+`vansmall` workspace, also write these model-specific columns when
+available:
+
+```text
+tf_crop_norm3_logit_gradcam_path
+tf_ori_norm3_logit_gradcam_path
+tf_crop_block3_3_logit_gradcam_path
+tf_ori_block3_3_logit_gradcam_path
+tf_crop_block4_1_logit_gradcam_path
+tf_ori_block4_1_logit_gradcam_path
+tf_crop_norm4_logit_gradcam_path
+tf_ori_norm4_logit_gradcam_path
+tf_crop_layer_montage_path
+tf_ori_layer_montage_path
+```
+
+Required for the VAN Small workspace:
+
+```text
+tf_crop_norm3_logit_gradcam_path
+tf_ori_norm3_logit_gradcam_path
+```
+
+The montage columns should point to pre-rendered PNGs that compare layers for
+one branch. AutoTorch will display those PNGs directly.
 
 ## Optional Feature Columns
 

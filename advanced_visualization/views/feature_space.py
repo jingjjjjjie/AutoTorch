@@ -1632,23 +1632,15 @@ def render_interactive_workspace(projected: pd.DataFrame, controls: dict) -> Non
     render_client_side_workspace(projected, controls)
 
 
-def main() -> None:
+def render_loaded_data(
+    df: pd.DataFrame,
+    *,
+    title: str = "Feature Space",
+    subtitle: str = "Visualize each provided item as one point, then compare metadata, prediction, and class subsets.",
+) -> None:
     inject_css()
-    st.title("UniRepLKNet-T Item Feature Explorer")
-    st.caption("Visualize each provided item as one point, then compare collected, printed, batch, source, and merged class subsets.")
-
-    df = load_default_csv()
-    uploaded_file = None
-    with st.sidebar.expander("Upload feature CSV override", expanded=False):
-        uploaded_file = st.file_uploader("Feature CSV", type=["csv"], label_visibility="collapsed")
-    if uploaded_file is not None:
-        st.session_state["active_feature_csv_path"] = None
-        st.session_state["active_feature_model_key"] = ""
-        df = load_csv(uploaded_file)
-
-    if df is None:
-        st.info("Configure feature_csv paths in Settings, upload a CSV, or launch with AUTOTORCH_FEATURE_CSV=/path/to/items.csv.")
-        return
+    st.title(title)
+    st.caption(subtitle)
 
     try:
         controls = sidebar_controls(df)
@@ -1697,6 +1689,27 @@ def main() -> None:
     render_sidebar_counts(projected, controls["group_column"])
 
     render_interactive_workspace(projected, controls)
+
+
+def main() -> None:
+    df = load_default_csv()
+    uploaded_file = None
+    with st.sidebar.expander("Upload feature CSV override", expanded=False):
+        uploaded_file = st.file_uploader("Feature CSV", type=["csv"], label_visibility="collapsed")
+    if uploaded_file is not None:
+        st.session_state["active_feature_csv_path"] = None
+        st.session_state["active_feature_model_key"] = ""
+        df = load_csv(uploaded_file)
+
+    if df is None:
+        st.info("Configure feature_csv paths in Settings, upload a CSV, or launch with AUTOTORCH_FEATURE_CSV=/path/to/items.csv.")
+        return
+
+    render_loaded_data(
+        df,
+        title="UniRepLKNet-T Item Feature Explorer",
+        subtitle="Visualize each provided item as one point, then compare collected, printed, batch, source, and merged class subsets.",
+    )
 
 
 if __name__ == "__main__":

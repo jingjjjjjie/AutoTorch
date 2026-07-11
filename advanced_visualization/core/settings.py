@@ -71,6 +71,70 @@ class UserModelConfig:
         return None
 
 
+DEFAULT_EXTRA_VIEW_CONFIGS = [
+    {
+        "model_type": "vansmall",
+        "label": "VAN Small Grad-CAM Review",
+        "description": "Branch and layer-specific logit Grad-CAM review for VAN Small artifacts.",
+        "view": "layered_gradcam",
+        "score": "logit",
+        "column_template": "tf_{branch}_{layer}_{score}_gradcam_path",
+        "required_columns": [
+            "tf_crop_norm3_logit_gradcam_path",
+            "tf_ori_norm3_logit_gradcam_path",
+        ],
+        "branches": [
+            {
+                "key": "crop",
+                "label": "Crop",
+                "image_candidates": ["absolute_ocr_path", "ocr_path", "crop_path"],
+            },
+            {
+                "key": "ori",
+                "label": "Ori",
+                "image_candidates": ["absolute_ori_path", "ori_path", "image_path", "path"],
+            },
+        ],
+        "layers": [
+            {"key": "norm3", "label": "norm3 Recommended"},
+            {"key": "block3_3", "label": "block3.3"},
+            {"key": "block4_1", "label": "block4.1"},
+            {"key": "norm4", "label": "norm4"},
+            {
+                "key": "montage",
+                "label": "montage",
+                "column_template": "tf_{branch}_layer_montage_path",
+                "display": "single",
+            },
+        ],
+        "prediction_candidates": ["tf_parallel_pred", "ypred_raw", "pred", "score"],
+        "metadata_columns": ["Recapture_Subclass", "Data_Identity", "Quality_Issue", "fraud_type"],
+    },
+    {
+        "model_type": "unireplknet",
+        "label": "UniRepLKNet Grad-CAM Review",
+        "description": "Configurable Grad-CAM artifact review for UniRepLKNet prepared outputs.",
+        "view": "layered_gradcam",
+        "score": "logit",
+        "column_template": "unireplknet_{branch}_{layer}_{score}_gradcam_path",
+        "required_columns": [],
+        "branches": [
+            {
+                "key": "image",
+                "label": "Image",
+                "image_candidates": ["absolute_ori_path", "absolute_ocr_path", "image_path", "path"],
+            }
+        ],
+        "layers": [
+            {"key": "default", "label": "Prepared Grad-CAM", "column_candidates": ["gradcam_path", "gradcam", "heatmap_path"]},
+            {"key": "stage4", "label": "stage4"},
+        ],
+        "prediction_candidates": ["prediction", "pred", "prob", "score", "result"],
+        "metadata_columns": ["Recapture_Subclass", "Data_Identity", "Quality_Issue"],
+    },
+]
+
+
 @dataclass
 class UserSettings:
     prediction_csv: str = ""
@@ -86,6 +150,7 @@ class UserSettings:
     review: dict[str, Any] = field(default_factory=dict)
     model_type_options: list[str] = field(default_factory=list)
     image_size_options: list[int] = field(default_factory=list)
+    extra_view_configs: list[dict[str, Any]] = field(default_factory=list)
     pipeline: dict[str, Any] = field(default_factory=dict)
     models: list[UserModelConfig] = field(default_factory=list)
 
@@ -105,6 +170,7 @@ class UserSettings:
             review=dict(payload.get("review", {})),
             model_type_options=[str(item) for item in payload.get("model_type_options", [])],
             image_size_options=[int(item) for item in payload.get("image_size_options", [])],
+            extra_view_configs=list(payload.get("extra_view_configs", DEFAULT_EXTRA_VIEW_CONFIGS)),
             pipeline=dict(payload.get("pipeline", {})),
             models=[UserModelConfig.from_dict(item) for item in payload.get("models", []) if isinstance(item, dict)],
         )
@@ -124,6 +190,7 @@ class UserSettings:
             "review": self.review,
             "model_type_options": self.model_type_options,
             "image_size_options": self.image_size_options,
+            "extra_view_configs": self.extra_view_configs,
             "pipeline": self.pipeline,
             "models": [model.to_dict() for model in self.models],
         }

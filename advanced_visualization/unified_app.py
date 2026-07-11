@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import sys
+from importlib import reload
 from pathlib import Path
 
 import streamlit as st
@@ -28,9 +29,16 @@ st.set_page_config(
 
 
 def main() -> None:
+    from advanced_visualization.views import launcher as launcher_app
+    launcher_app = reload(launcher_app)
+
+    if launcher_app.has_workspace_query():
+        launcher_app.render_workspace_from_query()
+        return
+
     view = st.sidebar.radio(
         "Page",
-        ["Image review", "Feature space", "Settings"],
+        ["Image review", "Feature space", "Launch workspace", "Settings"],
     )
 
     if view == "Image review":
@@ -43,6 +51,10 @@ def main() -> None:
         from advanced_visualization.views import feature_space as feature_space_app
 
         feature_space_app.main()
+        return
+
+    if view == "Launch workspace":
+        launcher_app.main()
         return
 
     from advanced_visualization.views import settings as settings_app

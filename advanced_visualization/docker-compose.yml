@@ -1,0 +1,30 @@
+services:
+  advanced-visualization:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: autotorch-advanced-visualization:latest
+    container_name: autotorch-advanced-visualization
+    ports:
+      - "8502:8501"
+      - "8765:8765"
+    environment:
+      STREAMLIT_SERVER_HEADLESS: "true"
+      STREAMLIT_BROWSER_GATHER_USAGE_STATS: "false"
+      AUTOTORCH_IMAGE_PROXY_ROOTS: "/routine_data:/mnt3:/mnt4:/mnt5:/app"
+    volumes:
+      - ..:/app
+      - /routine_data:/routine_data
+      - /mnt3:/mnt3
+      - /mnt4:/mnt4
+      - /mnt5:/mnt5
+      - /tmp:/tmp
+    working_dir: /app
+    command:
+      - streamlit
+      - run
+      - advanced_visualization/unified_app.py
+      - --server.address=0.0.0.0
+      - --server.port=8501
+    shm_size: "2gb"
+    restart: unless-stopped

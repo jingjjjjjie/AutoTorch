@@ -3,8 +3,11 @@ streamlit-plotly-events>=0.0.6
 plotly>=5.0
 pandas>=1.5
 numpy>=1.23
+pillow>=9.0
+matplotlib>=3.7
 scikit-learn>=1.2
 umap-learn>=0.5
-pillow>=9.0
 torch
 torchvision
+timm>=0.9
+omegaconf>=2.3

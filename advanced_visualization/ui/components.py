@@ -1,0 +1,217 @@
+"""Reusable Streamlit components for the image-review view."""
+from __future__ import annotations
+
+import html
+from pathlib import Path
+from typing import Optional
+
+import numpy as np
+import pandas as pd
+import streamlit as st
+
+from advanced_visualization.core.gradcam_cache import resolve_gradcam_path
+from advanced_visualization.core.images import load_image
+from advanced_visualization.ui.zoom import render_zoomable_images
+
+def format_card_value(value) -> str:
+    if pd.isna(value):
+        return "Missing"
+    if isinstance(value, (float, np.floating)):
+        return f"{float(value):.4g}"
+    if isinstance(value, (int, np.integer)):
+        return f"{int(value)}"
+    text = str(value)
+    return text if text else "Missing"
+
+def card_filter_tags(row: pd.Series, controls: dict) -> list[tuple[str, str]]:
+    tags: list[tuple[str, str]] = []
+    for column in controls["categorical_filters"]:
+        if column in row.index:
+            tags.append((str(column), format_card_value(row[column])))
+    for column in controls["numeric_ranges"]:
+        if column in row.index:
+            tags.append((str(column), format_card_value(row[column])))
+    return tags
+
+def render_filter_tags(row: pd.Series, controls: dict) -> None:
+    tags = card_filter_tags(row, controls)
+    if not tags:
+        return
+    chips = "".join(
+        (
+            '<span class="filter-chip">'
+            f'<span class="filter-key">{html.escape(label)}</span>'
+            f'<span class="filter-value">{html.escape(value)}</span>'
+            "</span>"
+        )
+        for label, value in tags
+    )
+    st.markdown(f'<div class="filter-strip">{chips}</div>', unsafe_allow_html=True)
+
+def gradcam_for_row(row: pd.Series, controls: dict) -> tuple[Optional[Path], Optional[str]]:
+    existing = row.get("__gradcam_path") or resolve_gradcam_path(row, controls)
+    if existing:
+        return Path(str(existing)), None
+    return None, None
+
+def render_summary(source: pd.DataFrame, filtered: pd.DataFrame, controls: dict) -> None:
+    scored = filtered[filtered["__has_eval"]]
+    failures = int(filtered["__is_failure"].sum()) if "__is_failure" in filtered else 0
+    failure_rate = failures / len(scored) if len(scored) else 0.0
+
+    prepared_gradcam = int(filtered["__has_gradcam"].sum()) if "__has_gradcam" in filtered else None
+
+    metric_cols = st.columns(6)
+    metric_cols[0].metric("Rows shown", f"{len(filtered):,}", delta=f"from {len(source):,}")
+    metric_cols[1].metric("Scored rows", f"{len(scored):,}")
+    metric_cols[2].metric("Failures", f"{failures:,}", delta=f"{failure_rate:.1%}")
+    metric_cols[3].metric("High-conf failures", f"{int((filtered['__is_failure'] & filtered['__confidence'].ge(controls['high_conf'])).sum()):,}")
+    metric_cols[4].metric("Low-conf failures", f"{int((filtered['__is_failure'] & filtered['__confidence'].le(controls['low_conf'])).sum()):,}")
+    metric_cols[5].metric("Prepared Grad-CAM", f"{prepared_gradcam:,}" if prepared_gradcam is not None else "visible")
+
+def page_bounds(total: int, page_size: int) -> tuple[int, int, int]:
+    total_pages = max(1, int(np.ceil(total / page_size)))
+    page_key = "advanced_visualization_page"
+    current = int(st.session_state.get(page_key, 1))
+    current = min(max(1, current), total_pages)
+    st.session_state[page_key] = current
+    start = (current - 1) * page_size
+    end = min(start + page_size, total)
+    return current, total_pages, start, end
+
+def render_pager(total: int, page_size: int) -> tuple[int, int]:
+    current, total_pages, start, end = page_bounds(total, page_size)
+    left, middle, right = st.columns([0.18, 0.64, 0.18])
+    with left:
+        if st.button("Previous", disabled=current <= 1, use_container_width=True):
+            st.session_state["advanced_visualization_page"] = current - 1
+            st.rerun()
+    with middle:
+        selected = st.number_input("Page", min_value=1, max_value=total_pages, value=current, step=1)
+        if selected != current:
+            st.session_state["advanced_visualization_page"] = int(selected)
+            st.rerun()
+        st.caption(f"Showing {start + 1 if total else 0:,}-{end:,} of {total:,}")
+    with right:
+        if st.button("Next", disabled=current >= total_pages, use_container_width=True):
+            st.session_state["advanced_visualization_page"] = current + 1
+            st.rerun()
+    return start, end
+
+def visible_count(total: int, batch_size: int) -> int:
+    key = "advanced_visualization_visible_count"
+    version_key = "advanced_visualization_loader_version"
+    loader_version = "stable_manual_20260710"
+    if st.session_state.get(version_key) != loader_version:
+        st.session_state[version_key] = loader_version
+        st.session_state[key] = batch_size
+    current = int(st.session_state.get(key, batch_size))
+    if current > batch_size * 6:
+        current = batch_size
+    current = min(max(batch_size, current), max(total, batch_size))
+    st.session_state[key] = current
+    return min(current, total)
+
+def render_bottomless_controls(total: int, batch_size: int) -> int:
+    count = visible_count(total, batch_size)
+    st.caption(f"Showing 1-{count:,} of {total:,}")
+    return count
+
+def render_load_more(total: int, batch_size: int) -> None:
+    count = visible_count(total, batch_size)
+    if count >= total:
+        st.caption(f"All {total:,} rows shown.")
+        return
+
+    left, middle, right = st.columns([0.25, 0.50, 0.25])
+    with middle:
+        if st.button("Load more", use_container_width=True, key="advanced_visualization_load_more"):
+            st.session_state["advanced_visualization_visible_count"] = min(total, count + batch_size)
+            st.rerun()
+        st.caption(f"Showing {count:,} of {total:,}")
+
+def row_label(row: pd.Series, controls: dict) -> str:
+    item = row.get(controls["item_id_column"], row.name)
+    subclass = row.get(controls["subclass_column"], "") if controls["subclass_column"] else ""
+    score = row.get("__prediction_score", np.nan)
+    confidence = row.get("__confidence", np.nan)
+    score_text = f"pred={score:.4f}" if pd.notna(score) else "pred=-"
+    conf_text = f"conf={confidence:.3f}" if pd.notna(confidence) else "conf=-"
+    return f"{item}\n{subclass}\n{score_text} | {conf_text}"
+
+def render_image_cell(
+    row: pd.Series,
+    controls: dict,
+    *,
+    display_index: Optional[int] = None,
+) -> None:
+    image_column = controls["image_column"]
+    original = load_image(row[image_column]) if image_column else None
+    view_mode = controls["view_mode"]
+    gradcam_error = None
+    if view_mode == "Original":
+        gradcam_path = row.get("__gradcam_path") or resolve_gradcam_path(row, controls)
+    else:
+        gradcam_path, gradcam_error = gradcam_for_row(row, controls)
+    gradcam = load_image(gradcam_path) if gradcam_path else None
+
+    is_failure = bool(row.get("__is_failure", False))
+    pill_class = "fail-pill" if is_failure else "pass-pill"
+    pill_text = row.get("__failure_type", "unscored")
+    if display_index is not None:
+        st.markdown(f'<span class="index-badge">#{display_index}</span>', unsafe_allow_html=True)
+    st.markdown(f'<span class="status-pill {pill_class}">{pill_text}</span>', unsafe_allow_html=True)
+
+    if view_mode == "Original":
+        if not render_zoomable_images([("Original", original)]):
+            st.caption("No image")
+    elif view_mode == "Grad-CAM":
+        if not render_zoomable_images([("Grad-CAM", gradcam)]):
+            st.caption("No Grad-CAM")
+            if gradcam_error:
+                st.caption(gradcam_error)
+    else:
+        if not render_zoomable_images([("Original", original), ("Grad-CAM", gradcam)]):
+            st.caption("Missing")
+        if original is None:
+            st.caption("Original missing")
+        if gradcam is None:
+            st.caption("Grad-CAM missing")
+            if gradcam_error:
+                st.caption(gradcam_error)
+
+    render_filter_tags(row, controls)
+    st.markdown(f'<div class="viewer-caption">{row_label(row, controls)}</div>', unsafe_allow_html=True)
+    if gradcam_path:
+        st.caption(Path(str(gradcam_path)).name)
+
+def render_grid(page_df: pd.DataFrame, controls: dict, start_index: int = 1) -> None:
+    cols_per_row = controls["columns_per_row"]
+    rows = list(enumerate(page_df.iterrows(), start=start_index))
+    for offset in range(0, len(rows), cols_per_row):
+        columns = st.columns(cols_per_row)
+        for column, (display_index, (_index, row)) in zip(columns, rows[offset : offset + cols_per_row]):
+            with column:
+                with st.container(border=True):
+                    render_image_cell(row, controls, display_index=display_index)
+
+def render_breakdowns(filtered: pd.DataFrame, controls: dict) -> None:
+    with st.expander("Breakdowns", expanded=True):
+        columns = st.columns(2)
+        with columns[0]:
+            st.caption("Failure type")
+            counts = filtered["__failure_type"].value_counts(dropna=False).rename_axis("type").reset_index(name="count")
+            st.dataframe(counts, hide_index=True, use_container_width=True, height=220)
+        with columns[1]:
+            subclass_column = controls["subclass_column"]
+            if subclass_column and subclass_column in filtered.columns:
+                st.caption(f"Failures by {subclass_column}")
+                table = (
+                    filtered.assign(__failure=filtered["__is_failure"].astype(int))
+                    .groupby(subclass_column, dropna=False)
+                    .agg(rows=("__failure", "size"), failures=("__failure", "sum"), mean_confidence=("__confidence", "mean"))
+                    .reset_index()
+                    .sort_values(["failures", "rows"], ascending=False)
+                )
+                table["failure_rate"] = (table["failures"] / table["rows"]).round(4)
+                st.dataframe(table, hide_index=True, use_container_width=True, height=220)

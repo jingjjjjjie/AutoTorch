@@ -1,11 +1,10 @@
-"""Streamlit app for exploring UniRepLKNet feature spaces."""
+"""Streamlit view for exploring feature spaces."""
 from __future__ import annotations
 
 import os
 import re
 import sys
 import threading
-import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Optional
@@ -19,8 +18,6 @@ import plotly.express as px
 import plotly.io as pio
 import streamlit as st
 import streamlit.components.v1 as components
-import torch
-import torch.nn.functional as F
 from PIL import Image
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
@@ -28,18 +25,28 @@ from sklearn.manifold import TSNE
 from sklearn.preprocessing import StandardScaler
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC_ROOT = REPO_ROOT / "src"
+VENDOR_PATH = Path(__file__).resolve().parent / "vendor"
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
-
-VENDOR_PATH = Path(__file__).resolve().parent / "vendor"
 if VENDOR_PATH.exists() and str(VENDOR_PATH) not in sys.path:
     sys.path.append(str(VENDOR_PATH))
 os.environ.setdefault("NUMBA_CACHE_DIR", "/tmp/autotorch_feature_visualization_numba")
 
-from data.idfraud.transforms import build_transform
-from models import build_model
+try:
+    from advanced_visualization.core.settings import configured_path, load_settings
+    from advanced_visualization.core.config import gradcam_artifact_root
+    from advanced_visualization.core.gradcam_cache import gradcam_file_index
+    from advanced_visualization.core.images import image_cache_digests
+except Exception:
+    configured_path = None
+    gradcam_artifact_root = None
+    gradcam_file_index = None
+    image_cache_digests = None
+    load_settings = None
 
 try:
     from umap import UMAP
@@ -56,93 +63,59 @@ MAX_UMAP_ROWS = 50000
 IMAGE_PROXY_PORT = int(os.environ.get("AUTOTORCH_IMAGE_PROXY_PORT", "8765"))
 IMAGE_PROXY_ALLOWED_ROOTS = tuple(
     Path(path).resolve()
-    for path in os.environ.get("AUTOTORCH_IMAGE_PROXY_ROOTS", "/routine_data:/mnt3:/mnt4:/home/jingjie/AutoTorch").split(":")
+    for path in os.environ.get("AUTOTORCH_IMAGE_PROXY_ROOTS", "/routine_data:/mnt3:/mnt4:/mnt5:/app:/home/jingjie/AutoTorch").split(":")
     if path
 )
-DEFAULT_METADATA_COLUMNS = ("Recapture_Subclass", "Data_Identity")
-DARK_SEQUENCE = ["#4cc9f0", "#f9a03f", "#9be564", "#c77dff", "#ff6b6b", "#57cc99", "#f7d774"]
-DEFAULT_MEAN = (0.485, 0.456, 0.406)
-DEFAULT_STD = (0.229, 0.224, 0.225)
+DEFAULT_METADATA_COLUMNS = ("Recapture_Subclass", "Data_Identity", "Quality_Issue")
 PRED_BUCKET_COLUMN = "__model_pred_bucket"
 PRED_DISPLAY_COLUMN = "__model_pred"
-GRADCAM_OUTPUT_DIR = Path(__file__).resolve().parent / "output" / "gradcam"
-GRADCAM_MODEL_LOCK = threading.Lock()
-GRADCAM_MODELS: dict[str, dict] = {}
-GRADCAM_CONFIGS = {
-    "Ex8point2_UniRepLKNet_T_legacy_v1_512_ori_epoch10_full_features": {
-        "checkpoint": Path("/mnt3/repo_and_weights/runs/Ex8point2_UniRepLKNet_T_legacy_v1_512_ori/checkpoints/epoch_10.pt"),
-        "model_name": "unireplknet_t",
-        "head_type": "legacy_v1",
-        "image_size": 512,
-        "transform_version": "v1",
-        "prediction_column": "Ex8point2_UniRepLKNet_T_legacy_v1_512_ori_epoch10_pred",
-    },
-    "Ex8point4_UniRepLKNet_B_in22k_legacy_v1_512_crop_epoch7_full_features": {
-        "checkpoint": Path("/mnt3/repo_and_weights/runs/Ex8point4_UniRepLKNet_B_in22k_legacy_v1_512_crop/checkpoints/epoch_7.pt"),
-        "model_name": "unireplknet_b_in22k",
-        "head_type": "legacy_v1",
-        "image_size": 512,
-        "transform_version": "v1",
-        "prediction_column": "Ex8point4_UniRepLKNet_B_in22k_legacy_v1_512_crop_epoch7_pred",
-    },
-    "Ex8point2res1024_moredata_largerbs_UniRepLKNet_T_legacy_v1_1024_ori_epoch11_full_features": {
-        "checkpoint": Path("/mnt3/repo_and_weights/runs2/Ex8point2res1024_moredata_largerbs_UniRepLKNet_T_legacy_v1_1024_ori/checkpoints/epoch_11.pt"),
-        "model_name": "unireplknet_t",
-        "head_type": "legacy_v1",
-        "image_size": 1024,
-        "transform_version": "v1",
-        "prediction_column": "Ex8point2res1024_moredata_largerbs_UniRepLKNet_T_legacy_v1_1024_ori_epoch11_pred",
-    },
-}
 
 
-st.set_page_config(
-    page_title="UniRepLKNet-T Item Feature Explorer",
-    page_icon=".",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
+if os.environ.get("AUTOTORCH_EMBEDDED_STREAMLIT") != "1":
+    st.set_page_config(
+        page_title="UniRepLKNet-T Item Feature Explorer",
+        page_icon=".",
+        layout="wide",
+        initial_sidebar_state="collapsed",
+    )
 
 
 def inject_css() -> None:
-    app_background = "#0d1211"
-    text = "#edf7f4"
-    sidebar_background = "#111817"
-    metric_background = "rgba(30, 41, 39, 0.92)"
-    border = "rgba(255,255,255,0.14)"
     st.markdown(
-        f"""
+        """
         <style>
-        .stApp {{
-            background: {app_background};
-            color: {text};
-        }}
-        section[data-testid="stSidebar"] {{
-            background: {sidebar_background};
-            color: {text};
-        }}
-        section[data-testid="stSidebar"] * {{
-            border-color: {border} !important;
-        }}
-        div[data-testid="stMetric"] {{
-            background: {metric_background};
-            border: 1px solid {border};
+        .stApp {
+            background: #202124 !important;
+            color: #f2f3f5 !important;
+        }
+        section[data-testid="stSidebar"] {
+            background: #26282c !important;
+            border-right: 1px solid rgba(255,255,255,0.12) !important;
+        }
+        section[data-testid="stSidebar"] label,
+        section[data-testid="stSidebar"] h1,
+        section[data-testid="stSidebar"] h2,
+        section[data-testid="stSidebar"] h3 {
+            color: #f2f3f5 !important;
+        }
+        div[data-testid="stMetric"] {
+            background: #2b2d31 !important;
+            border: 1px solid rgba(255,255,255,0.14) !important;
             border-radius: 8px;
-            padding: 0.75rem 0.9rem;
-        }}
-        .block-container {{
+        }
+        .block-container {
             padding-top: 1rem;
             padding-bottom: 2rem;
             padding-left: 0.75rem;
             padding-right: 0.75rem;
             max-width: none;
-        }}
-        h1, h2, h3 {{
+        }
+        h1, h2, h3 {
             letter-spacing: 0;
-        }}
-        div[data-testid="stButton"] > button[kind="secondary"] {{
+        }
+        div[data-testid="stButton"] > button[kind="secondary"] {
             border-radius: 999px;
-        }}
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -151,6 +124,22 @@ def inject_css() -> None:
 
 def load_csv(uploaded_file) -> pd.DataFrame:
     return pd.read_csv(uploaded_file, low_memory=False)
+
+
+@st.cache_data(show_spinner=False)
+def read_feature_csv(path: str, modified_ns: int) -> pd.DataFrame:
+    return pd.read_csv(path, low_memory=False)
+
+
+def settings_feature_csv_paths() -> list[tuple[str, Path, str]]:
+    if load_settings is None or configured_path is None:
+        return []
+    sources: list[tuple[str, Path, str]] = []
+    for model in load_settings().models:
+        if not model.enabled or not model.feature_csv.strip():
+            continue
+        sources.append((f"{model.key} - features", configured_path(model.feature_csv), model.key))
+    return sources
 
 
 def default_csv_paths() -> list[Path]:
@@ -163,26 +152,35 @@ def default_csv_paths() -> list[Path]:
     return [Path(raw_path.strip()).expanduser() for raw_path in raw_paths.split(separator) if raw_path.strip()]
 
 
+def default_feature_sources() -> list[tuple[str, Path, str]]:
+    sources = settings_feature_csv_paths()
+    sources.extend((f"{path.stem} - env", path, "") for path in default_csv_paths())
+    return sources
+
+
 def load_default_csv() -> Optional[pd.DataFrame]:
-    paths = default_csv_paths()
-    if not paths:
+    sources = default_feature_sources()
+    if not sources:
         st.session_state["active_feature_csv_path"] = None
         return None
 
-    if len(paths) == 1:
-        path = paths[0]
+    st.sidebar.header("Feature source")
+    if len(sources) == 1:
+        label, path, model_key = sources[0]
+        st.sidebar.caption(label)
     else:
-        labels = [path.stem for path in paths]
-        selected_label = st.sidebar.selectbox("Default feature set", labels)
-        path = paths[labels.index(selected_label)]
+        labels = [label for label, _path, _model_key in sources]
+        selected_label = st.sidebar.selectbox("Feature set", labels)
+        _label, path, model_key = sources[labels.index(selected_label)]
 
     if not path.exists():
-        st.sidebar.error(f"Default CSV does not exist: {path}")
+        st.sidebar.error(f"Feature CSV does not exist: {path}")
         st.session_state["active_feature_csv_path"] = None
         return None
     st.session_state["active_feature_csv_path"] = str(path.resolve())
-    st.sidebar.caption(f"Loaded default CSV: {path}")
-    return pd.read_csv(path, low_memory=False)
+    st.session_state["active_feature_model_key"] = model_key
+    st.sidebar.caption(str(path))
+    return read_feature_csv(str(path), path.stat().st_mtime_ns)
 
 
 def infer_feature_columns(df: pd.DataFrame) -> list[str]:
@@ -309,7 +307,7 @@ def project_features(
         subtitle = f"Perplexity: {safe_perplexity}"
     elif method == "UMAP":
         if UMAP is None:
-            message = "UMAP requires a working umap-learn installation. Install feature_visualization/requirements.txt."
+            message = "UMAP requires a working umap-learn installation. Install advanced_visualization/requirements.txt."
             if UMAP_IMPORT_ERROR is not None:
                 message = f"{message} Import error: {UMAP_IMPORT_ERROR}"
             raise ValueError(message)
@@ -376,24 +374,41 @@ def image_from_path(path_value) -> Optional[Image.Image]:
 def image_proxy_url(path_value) -> str:
     if pd.isna(path_value):
         return ""
-    return f"http://127.0.0.1:{IMAGE_PROXY_PORT}/image?path={quote(str(path_value))}"
+    return f"/image?path={quote(str(path_value))}"
 
 
-def gradcam_config_key() -> str:
-    active_csv = st.session_state.get("active_feature_csv_path")
-    if not active_csv:
-        return ""
-    stem = Path(active_csv).stem
-    return stem if stem in GRADCAM_CONFIGS else ""
+@st.cache_data(show_spinner=False)
+def cached_gradcam_index(root: str, method: str = "", modified_ns: int = 0) -> dict[str, str]:
+    if gradcam_file_index is None:
+        return {}
+    return gradcam_file_index(root, method=method)
+
+
+def prepared_gradcam_url(path_value, model_key: str, method: str = "gradcam") -> str:
+    path = prepared_gradcam_path(path_value, model_key, method=method)
+    return image_proxy_url(path) if path else ""
+
+
+def prepared_gradcam_path(path_value, model_key: str, method: str = "gradcam") -> Optional[Path]:
+    if not model_key or pd.isna(path_value) or gradcam_artifact_root is None or image_cache_digests is None:
+        return None
+    root = gradcam_artifact_root(model_key)
+    if root is None or not root.exists():
+        return None
+    index = cached_gradcam_index(str(root), method, root.stat().st_mtime_ns)
+    suffixes = ("_gradcampp_logit", "_gradcampp") if method in {"gradcam++", "gradcampp"} else ("_gradcam_logit", "_gradcam")
+    for digest in image_cache_digests(path_value):
+        gradcam_path = index.get(digest)
+        if gradcam_path and any(marker in Path(gradcam_path).name for marker in suffixes):
+            return Path(gradcam_path)
+        for marker in suffixes:
+            candidate = root / f"{digest}{marker}.png"
+            if candidate.is_file():
+                return candidate
+    return None
 
 
 def active_prediction_column(df: pd.DataFrame) -> Optional[str]:
-    config_key = gradcam_config_key()
-    if config_key:
-        configured = GRADCAM_CONFIGS[config_key].get("prediction_column")
-        if configured in df.columns:
-            return configured
-
     candidates = [
         column
         for column in df.select_dtypes(include=[np.number]).columns
@@ -403,6 +418,15 @@ def active_prediction_column(df: pd.DataFrame) -> Optional[str]:
         return candidates[0]
     generated_candidates = [column for column in candidates if str(column).endswith("_pred")]
     return generated_candidates[-1] if generated_candidates else None
+
+
+def configured_image_column_for_model(model_key: str, columns: list[str]) -> Optional[str]:
+    if not model_key or load_settings is None:
+        return None
+    for model in load_settings().models:
+        if model.key == model_key and model.image_column in columns:
+            return model.image_column
+    return None
 
 
 def is_allowed_image_path(path: Path) -> bool:
@@ -415,159 +439,6 @@ def is_allowed_image_path(path: Path) -> bool:
     if resolved.suffix.lower() not in {".jpg", ".jpeg", ".png", ".webp", ".bmp"}:
         return False
     return any(resolved == root or root in resolved.parents for root in IMAGE_PROXY_ALLOWED_ROOTS)
-
-
-def load_state_dict(model: torch.nn.Module, checkpoint_path: Path, device: torch.device) -> None:
-    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
-    state_dict = checkpoint.get("model_state_dict", checkpoint)
-    normalized = {}
-    for key, value in state_dict.items():
-        if key.startswith("module."):
-            key = key[len("module.") :]
-        normalized[key] = value
-    model.load_state_dict(normalized, strict=True)
-
-
-def gradcam_device() -> torch.device:
-    requested = os.environ.get("AUTOTORCH_GRADCAM_DEVICE")
-    if requested:
-        return torch.device(requested)
-    return torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-
-def load_gradcam_bundle(config_key: str) -> dict:
-    with GRADCAM_MODEL_LOCK:
-        if config_key in GRADCAM_MODELS:
-            return GRADCAM_MODELS[config_key]
-
-        config = GRADCAM_CONFIGS[config_key]
-        device = gradcam_device()
-        model = build_model(
-            model_name=config["model_name"],
-            device=device,
-            task="classification",
-            head_type=config["head_type"],
-            freeze_backbone=False,
-        )
-        load_state_dict(model, config["checkpoint"], device)
-        model.eval()
-        transform = build_transform(
-            image_size=config["image_size"],
-            normalize_mean=DEFAULT_MEAN,
-            normalize_std=DEFAULT_STD,
-            version=config["transform_version"],
-        )
-        target_layer = model.feature_extractor.stages[-1]
-        bundle = {
-            "model": model,
-            "transform": transform,
-            "target_layer": target_layer,
-            "device": device,
-        }
-        GRADCAM_MODELS[config_key] = bundle
-        return bundle
-
-
-def gradcam_output_path(config_key: str, image_path: Path, method: str) -> Path:
-    resolved = image_path.expanduser().resolve()
-    stamp = f"{resolved}:{resolved.stat().st_mtime_ns}"
-    digest = hashlib.sha1(stamp.encode("utf-8")).hexdigest()[:18]
-    suffix = "gradcampp_logit" if method == "gradcam++" else "gradcam_logit"
-    return GRADCAM_OUTPUT_DIR / config_key / f"{digest}_{suffix}.png"
-
-
-def overlay_gradcam(original: Image.Image, cam: np.ndarray) -> Image.Image:
-    base = np.asarray(original.convert("RGB"), dtype=np.float32)
-    heat = np.zeros_like(base)
-    heat[..., 0] = 255.0 * cam
-    heat[..., 1] = 210.0 * np.sqrt(cam)
-    heat[..., 2] = 28.0 * (1.0 - cam) * cam
-    alpha = np.clip(0.18 + 0.55 * cam[..., None], 0.18, 0.65)
-    overlay = base * (1.0 - alpha) + heat * alpha
-    return Image.fromarray(np.clip(overlay, 0, 255).astype(np.uint8))
-
-
-def gradcam_score(model: torch.nn.Module, input_tensor: torch.Tensor) -> torch.Tensor:
-    features = model.feature_extractor(input_tensor)
-    head_sequence = getattr(model.mlp_head, "fc", None)
-    if head_sequence is None:
-        head_sequence = getattr(model.mlp_head, "head", None)
-
-    if isinstance(head_sequence, torch.nn.Sequential) and len(head_sequence) > 0:
-        layers = list(head_sequence.children())
-        if isinstance(layers[-1], torch.nn.Sigmoid):
-            score = features
-            for layer in layers[:-1]:
-                score = layer(score)
-            return score.squeeze()
-
-    return model.mlp_head(features).squeeze()
-
-
-def compute_cam(activation: torch.Tensor, gradient: torch.Tensor, method: str) -> torch.Tensor:
-    if method == "gradcam++":
-        grad_2 = gradient.pow(2)
-        grad_3 = gradient.pow(3)
-        sum_activations = activation.sum(dim=(2, 3), keepdim=True)
-        alpha = grad_2 / (2.0 * grad_2 + sum_activations * grad_3 + 1e-8)
-        alpha = torch.where(gradient != 0, alpha, torch.zeros_like(alpha))
-        weights = (alpha * torch.relu(gradient)).sum(dim=(2, 3), keepdim=True)
-    else:
-        weights = gradient.mean(dim=(2, 3), keepdim=True)
-    return torch.relu((weights * activation).sum(dim=1, keepdim=True))
-
-
-def generate_gradcam(config_key: str, image_path: Path, method: str = "gradcam") -> Path:
-    method = "gradcam++" if method == "gradcam++" else "gradcam"
-    if config_key not in GRADCAM_CONFIGS:
-        raise ValueError("No Grad-CAM model config for this feature CSV.")
-    if not is_allowed_image_path(image_path):
-        raise ValueError("Image path is not readable by the viewer.")
-
-    output_path = gradcam_output_path(config_key, image_path, method)
-    if output_path.exists():
-        return output_path
-
-    bundle = load_gradcam_bundle(config_key)
-    model = bundle["model"]
-    transform = bundle["transform"]
-    target_layer = bundle["target_layer"]
-    device = bundle["device"]
-
-    activations = {}
-    gradients = {}
-
-    def forward_hook(_module, _inputs, output):
-        activations["value"] = output
-
-    def backward_hook(_module, _grad_input, grad_output):
-        gradients["value"] = grad_output[0]
-
-    forward_handle = target_layer.register_forward_hook(forward_hook)
-    backward_handle = target_layer.register_full_backward_hook(backward_hook)
-    try:
-        image = Image.open(image_path).convert("RGB")
-        input_tensor = transform(image).unsqueeze(0).to(device)
-        model.zero_grad(set_to_none=True)
-        score = gradcam_score(model, input_tensor).mean()
-        score.backward()
-
-        activation = activations["value"].detach()
-        gradient = gradients["value"].detach()
-        cam = compute_cam(activation, gradient, method)
-        cam = F.interpolate(cam, size=(image.height, image.width), mode="bilinear", align_corners=False)
-        cam = cam.squeeze().float()
-        cam_min = cam.min()
-        cam_max = cam.max()
-        cam = (cam - cam_min) / (cam_max - cam_min + 1e-8)
-        cam_np = cam.detach().cpu().numpy()
-
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        overlay_gradcam(image, cam_np).save(output_path)
-        return output_path
-    finally:
-        forward_handle.remove()
-        backward_handle.remove()
 
 
 def send_file_response(handler: BaseHTTPRequestHandler, path: Path, content_type: str, cache_control: str) -> None:
@@ -588,23 +459,30 @@ def send_file_response(handler: BaseHTTPRequestHandler, path: Path, content_type
 class ImageProxyHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
+        query = parse_qs(parsed.query)
         if parsed.path == "/gradcam":
-            config_key = parse_qs(parsed.query).get("config", [""])[0]
-            raw_path = parse_qs(parsed.query).get("path", [""])[0]
-            method = parse_qs(parsed.query).get("method", ["gradcam"])[0]
-            try:
-                output_path = generate_gradcam(config_key, Path(unquote(raw_path)), method=method)
-            except Exception as exc:
-                self.send_error(500, str(exc))
+            self.send_error(410, "Interactive Grad-CAM generation is disabled. Use prepared Grad-CAM files.")
+            return
+
+        if parsed.path == "/prepared-gradcam":
+            model_key = query.get("model", [""])[0]
+            raw_image_path = query.get("path", [""])[0]
+            if not model_key or not raw_image_path:
+                self.send_error(404)
                 return
-            send_file_response(self, output_path, "image/png", "public, max-age=3600")
+            method = query.get("method", ["gradcam"])[0]
+            gradcam_path = prepared_gradcam_path(unquote(raw_image_path), model_key, method=method)
+            if gradcam_path is None or not is_allowed_image_path(gradcam_path):
+                self.send_error(404)
+                return
+            send_file_response(self, gradcam_path.expanduser().resolve(), "image/png", "public, max-age=3600")
             return
 
         if parsed.path != "/image":
             self.send_error(404)
             return
 
-        raw_path = parse_qs(parsed.query).get("path", [""])[0]
+        raw_path = query.get("path", [""])[0]
         image_path = Path(unquote(raw_path))
         if not is_allowed_image_path(image_path):
             self.send_error(404)
@@ -629,7 +507,7 @@ def ensure_image_proxy() -> None:
     if st.session_state.get("image_proxy_started"):
         return
     try:
-        server = ThreadingHTTPServer(("127.0.0.1", IMAGE_PROXY_PORT), ImageProxyHandler)
+        server = ThreadingHTTPServer(("0.0.0.0", IMAGE_PROXY_PORT), ImageProxyHandler)
     except OSError:
         # A previous hot-reload may already have the proxy bound; keep rendering.
         st.session_state["image_proxy_started"] = True
@@ -711,6 +589,7 @@ def sidebar_controls(df: pd.DataFrame) -> dict:
     umap_neighbors = st.sidebar.slider("UMAP neighbors", min_value=2, max_value=200, value=15)
     umap_min_dist = st.sidebar.slider("UMAP min distance", min_value=0.0, max_value=0.99, value=0.10, step=0.01)
     random_state = st.sidebar.number_input("Random seed", min_value=0, max_value=99999, value=42, step=1)
+    max_plot_rows = st.sidebar.number_input("Max plot rows", min_value=1000, max_value=50000, value=5000, step=1000)
 
     st.sidebar.header("Plot")
     if "fullscreen_plot" not in st.session_state:
@@ -735,10 +614,12 @@ def sidebar_controls(df: pd.DataFrame) -> dict:
     facet_options = ["None"] + cats
     facet_column = st.sidebar.selectbox("Facet by", options=facet_options)
     render_mode = st.sidebar.selectbox("Render mode", options=["Auto", "WebGL", "SVG"])
+    columns = df.columns.tolist()
+    model_key = str(st.session_state.get("active_feature_model_key") or "")
     image_candidates = ("path", "absolute_ori_path", "absolute_ocr_path", "ori_path", "ocr_path")
-    image_default_column = find_default_column(df.columns.tolist(), image_candidates)
-    image_default = df.columns.tolist().index(image_default_column) + 1 if image_default_column in df.columns else 0
-    image_column = st.sidebar.selectbox("Image path column", options=["None"] + df.columns.tolist(), index=image_default)
+    image_default_column = configured_image_column_for_model(model_key, columns) or find_default_column(columns, image_candidates)
+    image_default = columns.index(image_default_column) + 1 if image_default_column in columns else 0
+    image_column = st.sidebar.selectbox("Image path column", options=["None"] + columns, index=image_default)
 
     return {
         "selected_features": selected_features,
@@ -752,6 +633,7 @@ def sidebar_controls(df: pd.DataFrame) -> dict:
         "umap_neighbors": umap_neighbors,
         "umap_min_dist": float(umap_min_dist),
         "random_state": int(random_state),
+        "max_plot_rows": int(max_plot_rows),
         "limit_genuine": limit_genuine,
         "genuine_limit": int(genuine_limit),
         "color_column": color_column,
@@ -795,6 +677,15 @@ def limit_genuine_rows(
     limited = pd.concat([sampled_genuine, df[~genuine_mask]], axis=0).sort_index()
     limited.attrs["sampling_note"] = f"Random-sampled Genuine from {len(genuine):,} to {max_rows:,} rows."
     return limited
+
+
+def limit_plot_rows(df: pd.DataFrame, max_rows: int, random_state: int) -> pd.DataFrame:
+    if max_rows <= 0 or len(df) <= max_rows:
+        return df
+    sampled = df.sample(n=max_rows, random_state=random_state).sort_index()
+    sampled.attrs.update(df.attrs)
+    sampled.attrs["plot_sampling_note"] = f"Random-sampled plot rows from {len(df):,} to {max_rows:,}."
+    return sampled
 
 
 def filter_merged_class(df: pd.DataFrame) -> pd.DataFrame:
@@ -935,7 +826,7 @@ def render_projection(projected: pd.DataFrame, controls: dict) -> Optional[int]:
     )
     custom_columns = ["__row_index", "__hover_item", "__hover_class", "__hover_group"]
     if controls["render_mode"] == "Auto":
-        plot_render_mode = "webgl" if len(plot_df) > 5000 else "svg"
+        plot_render_mode = "webgl" if len(plot_df) > 2000 else "svg"
     else:
         plot_render_mode = controls["render_mode"].lower()
 
@@ -948,8 +839,7 @@ def render_projection(projected: pd.DataFrame, controls: dict) -> Optional[int]:
         facet_col=controls["facet_column"],
         hover_name=item_column if item_column in plot_df.columns else None,
         custom_data=custom_columns,
-        template="plotly_dark",
-        color_discrete_sequence=DARK_SEQUENCE,
+        template="plotly",
         height=920 if controls["fullscreen_plot"] else 720,
         opacity=0.82,
         render_mode=plot_render_mode,
@@ -976,8 +866,9 @@ def render_projection(projected: pd.DataFrame, controls: dict) -> Optional[int]:
     fig.update_layout(
         dragmode="select",
         legend_title_text=controls.get("color_title", controls["color_column"]),
-        paper_bgcolor="#0d1211",
-        plot_bgcolor="#121a18",
+        paper_bgcolor="#202124",
+        plot_bgcolor="#202124",
+        font=dict(color="#f2f3f5"),
         margin=dict(l=8, r=8, t=34, b=8),
         xaxis_title=None,
         yaxis_title=None,
@@ -1002,12 +893,10 @@ def render_projection(projected: pd.DataFrame, controls: dict) -> Optional[int]:
 def render_client_side_workspace(projected: pd.DataFrame, controls: dict) -> None:
     ensure_image_proxy()
     render_plot_toolbar()
-    active_gradcam_config = gradcam_config_key()
-    gradcam_endpoint = f"http://127.0.0.1:{IMAGE_PROXY_PORT}/gradcam"
-
     plot_df = projected.copy()
     item_column = controls["item_id_column"]
     image_column = controls["image_column"]
+    model_key = str(st.session_state.get("active_feature_model_key") or "")
     plot_df["__row_index"] = plot_df.index.astype(str)
     plot_df["__hover_item"] = plot_df[item_column].astype(str) if item_column in plot_df.columns else plot_df.index.astype(str)
     plot_df["__hover_class"] = plot_df["merged_class"].astype(str) if "merged_class" in plot_df.columns else ""
@@ -1021,22 +910,19 @@ def render_client_side_workspace(projected: pd.DataFrame, controls: dict) -> Non
     )
     if image_column is not None and image_column in plot_df.columns:
         plot_df["__image_path"] = plot_df[image_column].fillna("").astype(str)
-        plot_df["__image_url"] = plot_df[image_column].map(image_proxy_url)
     else:
         plot_df["__image_path"] = ""
-        plot_df["__image_url"] = ""
 
     custom_columns = [
         "__row_index",
         "__hover_item",
         "__hover_class",
         "__hover_group",
-        "__image_url",
         "__image_path",
         "__hover_pred",
     ]
     if controls["render_mode"] == "Auto":
-        plot_render_mode = "webgl" if len(plot_df) > 5000 else "svg"
+        plot_render_mode = "webgl" if len(plot_df) > 2000 else "svg"
     else:
         plot_render_mode = controls["render_mode"].lower()
 
@@ -1050,8 +936,7 @@ def render_client_side_workspace(projected: pd.DataFrame, controls: dict) -> Non
         facet_col=controls["facet_column"],
         hover_name=item_column if item_column in plot_df.columns else None,
         custom_data=custom_columns,
-        template="plotly_dark",
-        color_discrete_sequence=DARK_SEQUENCE,
+        template="plotly",
         height=plot_height,
         opacity=0.82,
         render_mode=plot_render_mode,
@@ -1062,7 +947,7 @@ def render_client_side_workspace(projected: pd.DataFrame, controls: dict) -> Non
             "<b>%{customdata[1]}</b><br>"
             "class=%{customdata[2]}<br>"
             "group=%{customdata[3]}<br>"
-            "pred=%{customdata[6]}<br>"
+            "pred=%{customdata[5]}<br>"
             "x=%{x:.4f}<br>"
             "y=%{y:.4f}"
             "<extra></extra>"
@@ -1079,8 +964,9 @@ def render_client_side_workspace(projected: pd.DataFrame, controls: dict) -> Non
             x=0,
             itemwidth=30,
         ),
-        paper_bgcolor="#0d1211",
-        plot_bgcolor="#121a18",
+        paper_bgcolor="#202124",
+        plot_bgcolor="#202124",
+        font=dict(color="#f2f3f5"),
         margin=dict(l=8, r=8, t=78, b=8),
         xaxis_title=None,
         yaxis_title=None,
@@ -1096,12 +982,16 @@ def render_client_side_workspace(projected: pd.DataFrame, controls: dict) -> Non
     )
     layout_class = "workspace fullscreen" if controls["fullscreen_plot"] else "workspace split"
     component_height = plot_height + 80
+    gradcam_action_buttons = """
+          <button id="gradcamButton" title="Show prepared Grad-CAM for the selected point" disabled>Grad-CAM</button>
+          <button id="gradcamPlusButton" title="Show prepared Grad-CAM++ for the selected point" disabled>Grad-CAM++</button>
+    """
     html = f"""
     <style>
       html, body {{
         margin: 0;
-        background: #0d1211;
-        color: #edf7f4;
+        background: #202124;
+        color: #f2f3f5;
         font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         overflow: auto;
       }}
@@ -1124,7 +1014,7 @@ def render_client_side_workspace(projected: pd.DataFrame, controls: dict) -> Non
       .inspector {{
         border: 1px solid rgba(255,255,255,0.14);
         border-radius: 8px;
-        background: #111817;
+        background: #2b2d31;
         padding: 12px;
         max-height: {plot_height}px;
         overflow: auto;
@@ -1139,7 +1029,7 @@ def render_client_side_workspace(projected: pd.DataFrame, controls: dict) -> Non
         font-weight: 650;
       }}
       .muted {{
-        color: rgba(237,247,244,0.68);
+        color: rgba(242,243,245,0.68);
         font-size: 12px;
         margin-bottom: 10px;
         overflow-wrap: anywhere;
@@ -1157,7 +1047,7 @@ def render_client_side_workspace(projected: pd.DataFrame, controls: dict) -> Non
         margin-bottom: 10px;
       }}
       .kv div:nth-child(odd) {{
-        color: rgba(237,247,244,0.62);
+        color: rgba(242,243,245,0.62);
       }}
       .inspector-actions {{
         display: flex;
@@ -1168,14 +1058,14 @@ def render_client_side_workspace(projected: pd.DataFrame, controls: dict) -> Non
       .inspector-actions button {{
         border: 1px solid rgba(255,255,255,0.18);
         border-radius: 999px;
-        background: rgba(237,247,244,0.08);
-        color: #edf7f4;
+        background: #34363b;
+        color: #f2f3f5;
         cursor: pointer;
         font-size: 12px;
         padding: 6px 10px;
       }}
       .inspector-actions button:hover {{
-        background: rgba(237,247,244,0.16);
+        background: #3d4046;
       }}
       #selectedImage {{
         display: none;
@@ -1185,7 +1075,7 @@ def render_client_side_workspace(projected: pd.DataFrame, controls: dict) -> Non
         object-fit: contain;
         border-radius: 6px;
         border: 1px solid rgba(255,255,255,0.14);
-        background: #0d1211;
+        background: #34363b;
       }}
       .workspace.fullscreen #selectedImage {{
         width: 340px;
@@ -1204,9 +1094,9 @@ def render_client_side_workspace(projected: pd.DataFrame, controls: dict) -> Non
         width: 34px;
         height: 34px;
         border-radius: 999px;
-        border: 1px solid rgba(255,255,255,0.32);
-        background: rgba(13,18,17,0.78);
-        color: #edf7f4;
+        border: 1px solid rgba(255,255,255,0.28);
+        background: rgba(32,33,36,0.88);
+        color: #f2f3f5;
         cursor: pointer;
         font-size: 17px;
         line-height: 1;
@@ -1254,7 +1144,7 @@ def render_client_side_workspace(projected: pd.DataFrame, controls: dict) -> Non
         border-radius: 999px;
         border: 1px solid rgba(255,255,255,0.26);
         background: rgba(20,20,20,0.82);
-        color: #edf7f4;
+        color: #ffffff;
         cursor: pointer;
         font-size: 16px;
       }}
@@ -1266,7 +1156,7 @@ def render_client_side_workspace(projected: pd.DataFrame, controls: dict) -> Non
         margin-top: 12px;
       }}
       .gradcam-title {{
-        color: rgba(237,247,244,0.72);
+        color: rgba(242,243,245,0.72);
         font-size: 12px;
         margin: 0 0 6px 0;
       }}
@@ -1278,7 +1168,7 @@ def render_client_side_workspace(projected: pd.DataFrame, controls: dict) -> Non
         object-fit: contain;
         border-radius: 6px;
         border: 1px solid rgba(255,255,255,0.14);
-        background: #0d1211;
+        background: #34363b;
       }}
       .workspace.fullscreen #gradcamImage {{
         width: 340px;
@@ -1310,8 +1200,7 @@ def render_client_side_workspace(projected: pd.DataFrame, controls: dict) -> Non
         <div class="inspector-actions">
           <button id="fadePoint" title="Make selected point transparent">Fade point</button>
           <button id="resetFades" title="Restore faded points">Reset fades</button>
-          <button id="gradcamButton" title="Generate Grad-CAM for the selected image">Grad-CAM</button>
-          <button id="gradcamPlusButton" title="Generate Grad-CAM++ for the selected image">Grad-CAM++</button>
+          {gradcam_action_buttons}
         </div>
         <div class="muted" id="gradcamStatus"></div>
         <div class="image-wrap" id="imageWrap">
@@ -1335,8 +1224,7 @@ def render_client_side_workspace(projected: pd.DataFrame, controls: dict) -> Non
     </div>
     <script>
       const plot = document.getElementById({div_id!r});
-      const gradcamConfig = {active_gradcam_config!r};
-      const gradcamEndpoint = {gradcam_endpoint!r};
+      const activeModelKey = {model_key!r};
       const selectedItem = document.getElementById("selectedItem");
       const selectedClass = document.getElementById("selectedClass");
       const selectedGroup = document.getElementById("selectedGroup");
@@ -1362,6 +1250,8 @@ def render_client_side_workspace(projected: pd.DataFrame, controls: dict) -> Non
       const resetFades = document.getElementById("resetFades");
       let activePoint = null;
       let activeImagePath = "";
+      let activeGradcamUrl = "";
+      let activeGradcamPlusUrl = "";
       let imageScale = 1;
       let imageOffsetX = 0;
       let imageOffsetY = 0;
@@ -1389,7 +1279,7 @@ def render_client_side_workspace(projected: pd.DataFrame, controls: dict) -> Non
 
       function toRgba(color, alpha) {{
         if (!color) {{
-          return `rgba(76, 201, 240, ${{alpha}})`;
+          return `rgba(31, 119, 180, ${{alpha}})`;
         }}
         if (color.startsWith("#")) {{
           const hex = color.replace("#", "");
@@ -1423,9 +1313,9 @@ def render_client_side_workspace(projected: pd.DataFrame, controls: dict) -> Non
       function originalColorForPoint(marker, pointIndex) {{
         const color = marker.color;
         if (Array.isArray(color)) {{
-          return color[pointIndex] || color[0] || "#4cc9f0";
+          return color[pointIndex] || color[0] || "#1f77b4";
         }}
-        return color || "#4cc9f0";
+        return color || "#1f77b4";
       }}
 
       function applyFades() {{
@@ -1451,6 +1341,26 @@ def render_client_side_workspace(projected: pd.DataFrame, controls: dict) -> Non
         }});
       }}
 
+      function proxyUrl(path) {{
+        if (!path) {{
+          return "";
+        }}
+        if (path.startsWith("http://") || path.startsWith("https://")) {{
+          return path;
+        }}
+        let pageUrl = null;
+        try {{
+          pageUrl = new URL(document.referrer);
+        }} catch (error) {{
+          try {{
+            pageUrl = new URL(window.parent.location.href);
+          }} catch (parentError) {{
+            pageUrl = new URL("http://127.0.0.1:8502/");
+          }}
+        }}
+        return `${{pageUrl.protocol}}//${{pageUrl.hostname}}:{IMAGE_PROXY_PORT}${{path}}`;
+      }}
+
       function updateInspector(point) {{
         const data = point.customdata || [];
         activePoint = {{
@@ -1461,15 +1371,27 @@ def render_client_side_workspace(projected: pd.DataFrame, controls: dict) -> Non
         selectedItem.textContent = data[1] || "Selected item";
         selectedClass.textContent = data[2] || "-";
         selectedGroup.textContent = data[3] || "-";
-        selectedPred.textContent = data[6] || "-";
-        selectedPath.textContent = data[5] || "-";
-        activeImagePath = data[5] || "";
+        selectedPred.textContent = data[5] || "-";
+        selectedPath.textContent = data[4] || "-";
+        activeImagePath = data[4] || "";
+        activeGradcamUrl = activeImagePath && activeModelKey
+          ? `/prepared-gradcam?method=gradcam&model=${{encodeURIComponent(activeModelKey)}}&path=${{encodeURIComponent(activeImagePath)}}`
+          : "";
+        activeGradcamPlusUrl = activeImagePath && activeModelKey
+          ? `/prepared-gradcam?method=${{encodeURIComponent("gradcam++")}}&model=${{encodeURIComponent(activeModelKey)}}&path=${{encodeURIComponent(activeImagePath)}}`
+          : "";
         gradcamImage.removeAttribute("src");
         gradcamImage.style.display = "none";
         gradcamWrap.style.display = "none";
-        gradcamStatus.textContent = gradcamConfig ? "" : "Grad-CAM is available for the three default feature CSVs.";
-        if (data[4]) {{
-          selectedImage.src = data[4];
+        if (gradcamButton) {{
+          gradcamButton.disabled = !activeGradcamUrl;
+        }}
+        if (gradcamPlusButton) {{
+          gradcamPlusButton.disabled = !activeGradcamPlusUrl;
+        }}
+        gradcamStatus.textContent = activeGradcamUrl ? "Prepared Grad-CAM available." : "No prepared Grad-CAM for this point.";
+        if (activeImagePath) {{
+          selectedImage.src = proxyUrl(`/image?path=${{encodeURIComponent(activeImagePath)}}`);
           selectedImage.style.display = "block";
           imageWrap.classList.add("has-image");
         }} else {{
@@ -1500,38 +1422,36 @@ def render_client_side_workspace(projected: pd.DataFrame, controls: dict) -> Non
         originalMarkers.clear();
       }});
 
-      function requestGradcam(method, label) {{
-        if (!gradcamConfig) {{
-          gradcamStatus.textContent = `${{label}} is not configured for this feature CSV.`;
+      function showPreparedGradcam(url, label) {{
+        if (!url) {{
+          gradcamStatus.textContent = `No prepared ${{label}} for this point.`;
           return;
         }}
-        if (!activeImagePath) {{
-          gradcamStatus.textContent = "Select a point with an image first.";
-          return;
-        }}
-        gradcamStatus.textContent = `Generating ${{label}}...`;
+        gradcamStatus.textContent = `Loading prepared ${{label}}...`;
         gradcamTitle.textContent = label;
         gradcamWrap.style.display = "block";
         gradcamImage.style.display = "none";
-        const url = `${{gradcamEndpoint}}?config=${{encodeURIComponent(gradcamConfig)}}&path=${{encodeURIComponent(activeImagePath)}}&method=${{encodeURIComponent(method)}}&t=${{Date.now()}}`;
         gradcamImage.onload = function() {{
-          gradcamStatus.textContent = `${{label}} ready.`;
+          gradcamStatus.textContent = `Prepared ${{label}} loaded.`;
           gradcamImage.style.display = "block";
         }};
         gradcamImage.onerror = function() {{
-          gradcamStatus.textContent = `${{label}} failed for this image/model.`;
+          gradcamStatus.textContent = `Prepared ${{label}} failed to load.`;
           gradcamImage.style.display = "none";
         }};
-        gradcamImage.src = url;
+        gradcamImage.src = proxyUrl(url);
       }}
 
-      gradcamButton.addEventListener("click", function() {{
-        requestGradcam("gradcam", "Grad-CAM");
-      }});
-
-      gradcamPlusButton.addEventListener("click", function() {{
-        requestGradcam("gradcam++", "Grad-CAM++");
-      }});
+      if (gradcamButton) {{
+        gradcamButton.addEventListener("click", function() {{
+          showPreparedGradcam(activeGradcamUrl, "Grad-CAM");
+        }});
+      }}
+      if (gradcamPlusButton) {{
+        gradcamPlusButton.addEventListener("click", function() {{
+          showPreparedGradcam(activeGradcamPlusUrl, "Grad-CAM++");
+        }});
+      }}
 
       function applyImageTransform() {{
         fullscreenImage.style.transform = `translate(${{imageOffsetX}}px, ${{imageOffsetY}}px) scale(${{imageScale}})`;
@@ -1704,7 +1624,10 @@ def render_selected_points(
         st.image(image, caption=str(row.get(item_id_column, row[image_column])), width=320)
 
 
-@st.fragment
+streamlit_fragment = getattr(st, "fragment", lambda func: func)
+
+
+@streamlit_fragment
 def render_interactive_workspace(projected: pd.DataFrame, controls: dict) -> None:
     render_client_side_workspace(projected, controls)
 
@@ -1714,15 +1637,17 @@ def main() -> None:
     st.title("UniRepLKNet-T Item Feature Explorer")
     st.caption("Visualize each provided item as one point, then compare collected, printed, batch, source, and merged class subsets.")
 
-    uploaded_file = st.sidebar.file_uploader("Feature CSV", type=["csv"])
-    if uploaded_file is None:
-        df = load_default_csv()
-    else:
+    df = load_default_csv()
+    uploaded_file = None
+    with st.sidebar.expander("Upload feature CSV override", expanded=False):
+        uploaded_file = st.file_uploader("Feature CSV", type=["csv"], label_visibility="collapsed")
+    if uploaded_file is not None:
         st.session_state["active_feature_csv_path"] = None
+        st.session_state["active_feature_model_key"] = ""
         df = load_csv(uploaded_file)
 
     if df is None:
-        st.info("Upload a CSV, or launch with AUTOTORCH_FEATURE_CSV=/path/to/items.csv.")
+        st.info("Configure feature_csv paths in Settings, upload a CSV, or launch with AUTOTORCH_FEATURE_CSV=/path/to/items.csv.")
         return
 
     try:
@@ -1747,8 +1672,9 @@ def main() -> None:
         )
         filtered = filter_merged_class(filtered)
         filtered = filter_hidden_rows(filtered)
+        projected_source = limit_plot_rows(filtered, controls["max_plot_rows"], controls["random_state"])
         projected = project_features(
-            filtered,
+            projected_source,
             tuple(controls["selected_features"]),
             controls["method"],
             controls["scale_features"],
@@ -1766,6 +1692,8 @@ def main() -> None:
     st.caption(projected.attrs.get("projection_note", ""))
     if filtered.attrs.get("sampling_note"):
         st.caption(filtered.attrs["sampling_note"])
+    if projected.attrs.get("plot_sampling_note"):
+        st.caption(projected.attrs["plot_sampling_note"])
     render_sidebar_counts(projected, controls["group_column"])
 
     render_interactive_workspace(projected, controls)

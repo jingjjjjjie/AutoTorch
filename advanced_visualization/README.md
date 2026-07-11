@@ -1,76 +1,154 @@
-# Advanced Visualization
+# AutoTorch Visualization
 
-Paged Streamlit image viewer for fast ID-fraud failure review.
+Unified Streamlit visualization for ID-fraud model review.
 
-It is CSV-first and works with annotation CSVs or feature-export CSVs. The app focuses on:
-
-- Advanced subclass and metadata filtering.
-- High-confidence and low-confidence failure buckets.
-- False-positive and false-negative review.
-- Paged original / Grad-CAM / side-by-side image inspection.
-- Subclass breakdown tables for spotting repeated patterns.
-
-## Launch
+Run:
 
 ```bash
-streamlit run advanced_visualization/app.py
+streamlit run advanced_visualization/unified_app.py
 ```
 
-By default, the app lists CSVs from:
+The sidebar `Page` selector contains:
+
+- `Image review`: prepared artifact gallery for predictions, prepared Grad-CAMs, filters, and failure buckets.
+- `Feature space`: embedding/projection explorer.
+- `Settings`: prediction CSV and model artifact configuration.
+
+## Settings
+
+Use the `Settings` page as the source of truth. It writes:
 
 ```text
-/home/jingjie/AutoTorch/feature_visualization/output
+advanced_visualization/settings.json
 ```
 
-To preload a CSV:
+Define:
+
+- prediction CSV
+- model key
+- artifact directory
+- model type, currently `unireplknet` or `artifact_only`
+- prediction column
+
+The Settings page separates viewer data sources from CLI-only model-loading
+fields. The Streamlit viewer does not load checkpoint weights. Checkpoint path,
+weights epoch, model name, head type, and image size are only used by
+`prepare_all.py` / `pregenerate_gradcam.py`.
+
+The app no longer hardcodes model runs or a default prediction CSV. Configure
+them in the `Settings` page or edit `advanced_visualization/settings.json`.
+
+## Unified Pipeline
+
+The preferred preparation path is the single pipeline:
 
 ```bash
-AUTOTORCH_ADVANCED_VIS_CSV=/path/to/joined_predictions.csv \
-streamlit run advanced_visualization/app.py
+python advanced_visualization/cli/prepare_all.py
 ```
 
-You can also point `AUTOTORCH_ADVANCED_VIS_CSV` at a directory containing CSV files.
+It uses enabled models from `advanced_visualization/settings.json` and performs:
 
-## Expected CSV
+1. standard artifact setup
+2. prepared CSV creation
+3. model forward pass for feature columns and prediction column
+4. prepared Grad-CAM overlay generation
+5. manifest writing
 
-Useful columns:
+You can also run one configured model:
 
-- An image path column, for example `absolute_ori_path`, `absolute_ocr_path`, `path`, or `image_path`.
-- A stable ID column, for example `uuid` or `id`.
-- A subclass/group column, for example `Recapture_Subclass`, `Tamper_Subclass`, or `Data_Identity`.
-- A truth column, usually `label`.
-- One numeric prediction column containing probabilities or scores.
-- Optional Grad-CAM path columns, or a directory containing Grad-CAM images named by the original image stem.
+```bash
+python advanced_visualization/cli/prepare_all.py --model-key my_model_key
+```
 
-## Grad-CAM Images
+Useful options:
 
-The viewer does not require Grad-CAM paths. If you have precomputed Grad-CAM files, use either:
+```bash
+--skip-features
+--skip-gradcam
+--limit 200
+--batch-size 8
+--gradcam-batch-size 16
+```
 
-- `Grad-CAM path column`: a CSV column that points directly to each overlay image.
-- `Grad-CAM directory`: a folder where files are named like `<original_image_stem>.png`, `<stem>.jpg`, `<stem>_gradcam.png`, or `<stem>_overlay.png`.
+The `Settings` page only edits configuration. Run preparation from the CLI so the viewer never generates Grad-CAM during browsing.
 
-For configured experiment CSVs, missing Grad-CAMs can also be generated on demand in the app, or pre-generated from the CLI. New generated overlays are written to the run artifact directory:
+## Feature Space
+
+Feature-space exploration is now part of this package:
 
 ```text
-/mnt3/repo_and_weights/runs.../<experiment>/gradcam
+advanced_visualization/views/feature_space.py
 ```
 
-Pre-generate a small test batch:
+Legacy helper scripts were moved to:
+
+```text
+advanced_visualization/cli/extract_unireplknet_t_features.py
+advanced_visualization/cli/create_feature_csv_template.py
+```
+
+Existing feature CSVs are stored under:
+
+```text
+advanced_visualization/output/
+```
+
+## Lower-Level Commands
+
+Manifest and prepared CSV only:
 
 ```bash
-python advanced_visualization/pregenerate_gradcam.py \
-  --csv /home/jingjie/AutoTorch/feature_visualization/output/Ex8point2_UniRepLKNet_T_legacy_v1_512_ori_epoch10_full_features.csv \
+python advanced_visualization/cli/preparation.py \
+  --artifact-dir /path/to/model_artifact_dir \
+  --pred-csv /path/to/predictions.csv \
+  --weights-epoch 11 \
+  --model-key my_model_key
+```
+
+Grad-CAM preparation only:
+
+```bash
+python advanced_visualization/cli/pregenerate_gradcam.py \
+  --csv /path/to/model_artifact_dir/prepared_predictions.csv \
   --limit 20
 ```
 
-Pre-generate only a filtered subset:
+## Docker
+
+Build and run:
 
 ```bash
-python advanced_visualization/pregenerate_gradcam.py \
-  --csv /home/jingjie/AutoTorch/feature_visualization/output/Ex8point2res1024_moredata_largerbs_UniRepLKNet_T_legacy_v1_1024_ori_epoch11_full_features.csv \
-  --filter Data_Identity=Feb_2026_mixed_RoutineAnnotation \
-  --filter Recapture_Subclass=Genuine \
-  --limit 200
+docker compose -f advanced_visualization/docker-compose.yml up --build advanced-visualization
 ```
 
-Use `--dry-run` to count what would be generated without writing files. By default, `--only-missing` is enabled.
+Open:
+
+```text
+http://localhost:8501
+```
+
+The compose file mounts the repo at `/app`. If your configured artifact paths
+live outside the repo, add the required bind mount in
+`advanced_visualization/docker-compose.yml`.
+
+## Model-Specific Code
+
+Model-specific Grad-CAM implementations live under:
+
+```text
+advanced_visualization/models/<model_type>/gradcam.py
+```
+
+Current folder:
+
+- `models/unireplknet/gradcam.py`
+
+Future model families should add their own folder and register the engine in
+`advanced_visualization/models/registry.py`. Model-specific behavior includes
+model construction, checkpoint loading, preprocessing, target layer selection,
+score selection, CAM computation, and any model-specific feature extraction
+logic.
+
+For the full checklist for adding a new run, new PyTorch backbone, new
+visualization model family, or TensorFlow support, see
+`advanced_visualization/handoff_docs/01_autotorch_model_integration_guide.md`.

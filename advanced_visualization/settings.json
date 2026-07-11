@@ -1,0 +1,137 @@
+{
+  "prediction_csv": "/home/jingjie/AutoTorch/src/eval/idfraud/annotation/joined_predictions.csv",
+  "manifest_name": "visualization_manifest.json",
+  "prepared_csv_name": "prepared_predictions.csv",
+  "default_gradcam_root": "advanced_visualization/gradcam",
+  "image_columns": [
+    "absolute_ori_path",
+    "absolute_ocr_path",
+    "path",
+    "image_path",
+    "ori_path",
+    "ocr_path"
+  ],
+  "id_columns": [
+    "uuid",
+    "id",
+    "item_id",
+    "sample_id"
+  ],
+  "subclass_columns": [
+    "Recapture_Subclass",
+    "Tamper_Subclass",
+    "subclass",
+    "class",
+    "label"
+  ],
+  "image_extensions": [
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".webp",
+    ".bmp"
+  ],
+  "normalize_mean": [
+    0.485,
+    0.456,
+    0.406
+  ],
+  "normalize_std": [
+    0.229,
+    0.224,
+    0.225
+  ],
+  "review": {
+    "positive_truth_value": 1,
+    "negative_truth_value": 0,
+    "invalid_truth_value": -1,
+    "default_truth_rows": "Valid only: 0 and 1",
+    "prediction_threshold": 0.5,
+    "high_confidence": 0.9,
+    "low_confidence": 0.6,
+    "default_failure_view": "All rows",
+    "default_browse_mode": "Bottomless scroll",
+    "default_image_mode": "Original",
+    "only_prepared_gradcam": false,
+    "page_size": 48,
+    "columns_per_row": 6,
+    "default_sort": "confidence desc",
+    "default_filter_columns": [
+      "Recapture_Subclass",
+      "Data_Identity",
+      "Quality_Issue"
+    ]
+  },
+  "model_type_options": [
+    "unireplknet",
+    "artifact_only"
+  ],
+  "image_size_options": [
+    224,
+    384,
+    512,
+    768,
+    1024
+  ],
+  "pipeline": {
+    "batch_size": 8,
+    "gradcam_batch_size": 16,
+    "num_workers": 4,
+    "save_workers": 8,
+    "only_missing_gradcam": true,
+    "generate_gradcam": true,
+    "extract_features": true,
+    "gradcam_limit": 0,
+    "cam_methods": [
+      "gradcam",
+      "gradcam++"
+    ]
+  },
+  "models": [
+    {
+      "key": "Ex8point2_UniRepLKNet_T_legacy_v1_512_ori_epoch10",
+      "prediction_csv": "/home/jingjie/AutoTorch/src/eval/idfraud/annotation/joined_predictions.csv",
+      "feature_csv": "/home/jingjie/AutoTorch/advanced_visualization/output/Ex8point2_UniRepLKNet_T_legacy_v1_512_ori_epoch10_full_features.csv",
+      "artifact_dir": "/mnt5/temp_jj/Ex8point2_UniRepLKNet_T_legacy_v1_512_ori",
+      "checkpoint": "/mnt5/temp_jj/Ex8point2_UniRepLKNet_T_legacy_v1_512_ori/checkpoints/epoch_10.pt",
+      "weights_epoch": 10,
+      "model_type": "unireplknet",
+      "model_name": "unireplknet_t",
+      "head_type": "legacy_v1",
+      "image_size": 512,
+      "image_column": "absolute_ori_path",
+      "prediction_column": "exp8point2_pred_ori",
+      "enabled": true
+    },
+    {
+      "key": "Ex8point4_UniRepLKNet_B_in22k_legacy_v1_512_crop_epoch7",
+      "prediction_csv": "/home/jingjie/AutoTorch/src/eval/idfraud/annotation/joined_predictions.csv",
+      "feature_csv": "/home/jingjie/AutoTorch/advanced_visualization/output/Ex8point4_UniRepLKNet_B_in22k_legacy_v1_512_crop_epoch7_full_features.csv",
+      "artifact_dir": "/mnt5/temp_jj/Ex8point4_UniRepLKNet_B_in22k_legacy_v1_512_crop",
+      "checkpoint": "/mnt5/temp_jj/Ex8point4_UniRepLKNet_B_in22k_legacy_v1_512_crop/checkpoints/epoch_7.pt",
+      "weights_epoch": 7,
+      "model_type": "unireplknet",
+      "model_name": "unireplknet_b_in22k",
+      "head_type": "legacy_v1",
+      "image_size": 512,
+      "image_column": "absolute_ocr_path",
+      "prediction_column": "exp8point4_pred_crop",
+      "enabled": true
+    },
+    {
+      "key": "Ex8point2res1024_moredata_largerbs_UniRepLKNet_T_legacy_v1_1024_ori_epoch11",
+      "prediction_csv": "/home/jingjie/AutoTorch/src/eval/idfraud/annotation/joined_predictions.csv",
+      "feature_csv": "/home/jingjie/AutoTorch/advanced_visualization/output/Ex8point2res1024_moredata_largerbs_UniRepLKNet_T_legacy_v1_1024_ori_epoch11_full_features.csv",
+      "artifact_dir": "/mnt5/temp_jj/Ex8point2res1024_moredata_largerbs_UniRepLKNet_T_legacy_v1_1024_ori",
+      "checkpoint": "/mnt5/temp_jj/Ex8point2res1024_moredata_largerbs_UniRepLKNet_T_legacy_v1_1024_ori/checkpoints/epoch_11.pt",
+      "weights_epoch": 11,
+      "model_type": "unireplknet",
+      "model_name": "unireplknet_t",
+      "head_type": "legacy_v1",
+      "image_size": 1024,
+      "image_column": "absolute_ori_path",
+      "prediction_column": "Ex8point2res1024largerbs_pred_ori",
+      "enabled": true
+    }
+  ]
+}

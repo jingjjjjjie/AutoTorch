@@ -214,7 +214,7 @@ def _render_review_settings(settings: UserSettings) -> dict:
     with layout_cols[2]:
         page_size = st.selectbox("Page size", [12, 24, 48, 96, 144], index=[12, 24, 48, 96, 144].index(int(current.get("page_size", 48))))
     with layout_cols[3]:
-        columns_per_row = st.slider("Columns per row", min_value=2, max_value=8, value=int(current.get("columns_per_row", 6)))
+        columns_per_row = st.slider("Columns per row", min_value=2, max_value=10, value=int(current.get("columns_per_row", 6)))
 
     sort_options = ["confidence desc", "confidence asc", "prediction desc", "prediction asc", "row order"]
     default_sort = st.selectbox(

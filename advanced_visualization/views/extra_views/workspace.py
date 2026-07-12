@@ -25,7 +25,19 @@ def _description(config: dict) -> str:
     )
 
 
+def _activate_source_context(source: dict) -> None:
+    model_key = str(source.get("model_key") or "")
+    artifact_dir = source.get("artifact_dir")
+    source_path = source.get("path")
+
+    st.session_state["advanced_visualization_active_csv_stem"] = model_key or (source_path.stem if source_path else "")
+    st.session_state["active_feature_model_key"] = model_key
+    st.session_state["advanced_visualization_artifact_dir"] = str(artifact_dir) if artifact_dir else ""
+
+
 def render(df: pd.DataFrame, source: dict, config: dict) -> None:
+    _activate_source_context(source)
+
     title = html.escape(_title(config))
     description = html.escape(_description(config))
     st.markdown(

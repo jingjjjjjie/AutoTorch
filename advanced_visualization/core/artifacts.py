@@ -47,13 +47,17 @@ class VisualizationManifest:
 
     @classmethod
     def from_json_dict(cls, payload: dict) -> "VisualizationManifest":
+        artifact_dir = Path(payload.get("artifact_dir") or payload.get("artifact_root") or "")
+        prepared_csv = Path(payload.get("prepared_csv") or payload.get("prepared_predictions_csv") or artifact_dir / PREPARED_CSV_NAME)
+        model_key = str(payload.get("model_key") or payload.get("run_name") or artifact_dir.name)
+        gradcam_dir = Path(payload.get("gradcam_dir") or artifact_dir / "gradcam")
         return cls(
-            artifact_dir=Path(payload["artifact_dir"]),
-            prepared_csv=Path(payload["prepared_csv"]),
-            source_csv=Path(payload["source_csv"]),
-            model_key=str(payload["model_key"]),
-            checkpoint=Path(payload["checkpoint"]),
-            gradcam_dir=Path(payload["gradcam_dir"]),
+            artifact_dir=artifact_dir,
+            prepared_csv=prepared_csv,
+            source_csv=Path(payload.get("source_csv") or ""),
+            model_key=model_key,
+            checkpoint=Path(payload.get("checkpoint") or ""),
+            gradcam_dir=gradcam_dir,
             image_column=str(payload.get("image_column", "")),
             item_id_column=str(payload.get("item_id_column", "")),
             truth_column=str(payload.get("truth_column", "")),

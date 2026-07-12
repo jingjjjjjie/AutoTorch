@@ -52,7 +52,7 @@ Recommended column conventions:
 - Prediction columns: include `pred`, `prob`, `score`, or `result` in the name.
 - Feature columns: `feature_0000`, `feature_0001`, ...
 - Explanation columns: direct PNG paths, for example
-  `tf_crop_norm3_logit_gradcam_path`.
+  `tf_crop_layer_montage_path`.
 
 If the CSV follows this contract:
 
@@ -395,14 +395,13 @@ columns:
 - `tf_parallel_pred`: mapped from IDRecapture `ypred_raw`
 - `tf_crop_pred`: mapped from `crop_ypred_raw`
 - `tf_ori_pred`: mapped from `ori_ypred_raw`
-- `tf_ori_gradcam_path`: PNG overlay path for original image Grad-CAM
-- `tf_crop_gradcam_path`: PNG overlay path for crop/OCR image Grad-CAM
+- `tf_ori_layer_montage_path`: PNG path for original-image VAN Small 2x2 layer montage
+- `tf_crop_layer_montage_path`: PNG path for crop/OCR VAN Small 2x2 layer montage
 - optional `feature_0000`, `feature_0001`, etc. from `avg_pool` or pooled
   `norm4`
 
 Use `model_type: artifact_only` in AutoTorch settings for this output. The
-viewer can then select either `tf_ori_gradcam_path` or `tf_crop_gradcam_path` as
-the Grad-CAM path column.
+VAN Small launch workspace can then display either montage branch directly.
 
 This keeps the infrastructure clean:
 
@@ -454,11 +453,11 @@ vansmall
 unireplknet
 ```
 
-Each config defines branches, layers, and a Grad-CAM path column template. For
-example, the VAN Small config uses:
+Each config defines branches, layers, and a Grad-CAM/montage path column
+template. The VAN Small current-delivery config uses:
 
 ```text
-tf_{branch}_{layer}_{score}_gradcam_path
+tf_{branch}_layer_montage_path
 ```
 
 Generic config shape:
@@ -504,25 +503,27 @@ The launcher generates a query-param URL and opens the workspace in a new tab.
 This keeps the launched model-specific workspace independent from the main app
 page/session state.
 
-The VAN Small workspace expects the TensorFlow exporter to provide at least:
+The VAN Small workspace currently expects montage-only TensorFlow artifacts.
+The exporter should provide at least:
 
 ```text
-tf_crop_norm3_logit_gradcam_path
-tf_ori_norm3_logit_gradcam_path
-```
-
-Optional VAN Small layer comparison columns:
-
-```text
-tf_crop_block3_3_logit_gradcam_path
-tf_ori_block3_3_logit_gradcam_path
-tf_crop_block4_1_logit_gradcam_path
-tf_ori_block4_1_logit_gradcam_path
-tf_crop_norm4_logit_gradcam_path
-tf_ori_norm4_logit_gradcam_path
 tf_crop_layer_montage_path
 tf_ori_layer_montage_path
 ```
+
+The exporter should compute these layers internally:
+
+```text
+norm3
+block3_3
+block4_1
+norm4
+```
+
+Then it should compose one 2x2 montage PNG per branch/sample and write the
+absolute montage paths into the two montage columns above. Per-layer Grad-CAM
+path columns are not required for the current VAN Small delivery and may be
+empty if present.
 
 Use:
 

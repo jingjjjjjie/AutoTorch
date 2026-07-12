@@ -9,7 +9,7 @@ AutoTorch will not load TensorFlow/Keras models. It will only read:
 
 - a prepared CSV;
 - resolved image paths;
-- precomputed Grad-CAM PNG overlays;
+- precomputed VAN Small 2x2 Grad-CAM montage PNGs;
 - optional numeric feature columns.
 
 ## Target TensorFlow Repo
@@ -33,24 +33,20 @@ Save exported visualization artifacts under `/mnt5`, matching the current
 AutoTorch visualization artifact convention:
 
 ```text
-/mnt5/temp_jj/idrecapture_autotorch_viz/<model_key>/<dataset>/
-```
-
-For the Ench21 model, use:
-
-```text
-/mnt5/temp_jj/idrecapture_autotorch_viz/idrecapture_ench21/<dataset>/
+/mnt5/temp_jj/<tf_vansmall_run_name>/
 ```
 
 The final folder must look like:
 
 ```text
-/mnt5/temp_jj/idrecapture_autotorch_viz/idrecapture_ench21/<dataset>/
+/mnt5/temp_jj/<tf_vansmall_run_name>/
   prepared_predictions.csv
   visualization_manifest.json
-  gradcam/
-    <uuid_or_stem>_ori_gradcam.png
-    <uuid_or_stem>_crop_gradcam.png
+  montage/
+    crop/
+      <uuid>_crop_layer_montage.png
+    ori/
+      <uuid>_ori_layer_montage.png
 ```
 
 ## Source Model Context
@@ -135,15 +131,16 @@ prediction and Grad-CAM columns added.
 If existing `.npy` heatmaps are missing or not compatible with Ench21, generate
 new Grad-CAMs inside the TensorFlow repo.
 
-For Ench21 VAN Small, use `norm4` as the default Grad-CAM target candidate
-instead of the old ResNet-specific `conv5_block3_out`.
+For Ench21 VAN Small, compute the requested Grad-CAM layers with pre-sigmoid
+logit as the target score. Do not use the old ResNet-specific
+`conv5_block3_out`.
 
 ## Required CSV: prepared_predictions.csv
 
 The exporter must write:
 
 ```text
-/mnt5/temp_jj/idrecapture_autotorch_viz/idrecapture_ench21/<dataset>/prepared_predictions.csv
+/mnt5/temp_jj/<tf_vansmall_run_name>/prepared_predictions.csv
 ```
 
 Required columns:
@@ -156,8 +153,8 @@ absolute_ocr_path
 tf_parallel_pred
 tf_crop_pred
 tf_ori_pred
-tf_ori_gradcam_path
-tf_crop_gradcam_path
+tf_crop_layer_montage_path
+tf_ori_layer_montage_path
 ```
 
 Map prediction columns from the existing IDRecapture result CSV:
@@ -221,48 +218,68 @@ block4.1
 norm4
 ```
 
-Convert each heatmap to an overlay PNG on top of the corresponding image:
+For the current VAN Small delivery, keep montage artifacts only. The exporter
+should still compute each requested layer internally, then compose a 2x2 montage
+per branch/sample and delete or avoid preserving intermediate per-layer PNGs.
 
 ```text
-/mnt5/temp_jj/idrecapture_autotorch_viz/idrecapture_ench21/<dataset>/gradcam/<uuid_or_stem>_ori_gradcam.png
-/mnt5/temp_jj/idrecapture_autotorch_viz/idrecapture_ench21/<dataset>/gradcam/<uuid_or_stem>_crop_gradcam.png
+/mnt5/temp_jj/<tf_vansmall_run_name>/montage/crop/<uuid>_crop_layer_montage.png
+/mnt5/temp_jj/<tf_vansmall_run_name>/montage/ori/<uuid>_ori_layer_montage.png
 ```
 
-For the general image viewer, write the production default PNG paths into:
+Write absolute paths to the montage PNGs into:
 
 ```text
-tf_ori_gradcam_path
-tf_crop_gradcam_path
-```
-
-The AutoTorch viewer can then select either column as the Grad-CAM path column.
-
-AutoTorch has a settings-driven `Launch workspace` page. For the configured
-`vansmall` workspace, also write these model-specific columns when
-available:
-
-```text
-tf_crop_norm3_logit_gradcam_path
-tf_ori_norm3_logit_gradcam_path
-tf_crop_block3_3_logit_gradcam_path
-tf_ori_block3_3_logit_gradcam_path
-tf_crop_block4_1_logit_gradcam_path
-tf_ori_block4_1_logit_gradcam_path
-tf_crop_norm4_logit_gradcam_path
-tf_ori_norm4_logit_gradcam_path
 tf_crop_layer_montage_path
 tf_ori_layer_montage_path
+```
+
+The AutoTorch VAN Small workspace displays these montage PNGs directly. The
+general single-layer Grad-CAM path columns are not required for this delivery.
+
+The exporter should treat Crop and Ori as separate branches:
+
+```text
+Crop:
+input column: absolute_ocr_path
+model weight: crop checkpoint
+output column: tf_crop_layer_montage_path
+
+Ori:
+input column: absolute_ori_path
+model weight: ori checkpoint
+output column: tf_ori_layer_montage_path
 ```
 
 Required for the VAN Small workspace:
 
 ```text
-tf_crop_norm3_logit_gradcam_path
-tf_ori_norm3_logit_gradcam_path
+tf_crop_layer_montage_path
+tf_ori_layer_montage_path
 ```
 
-The montage columns should point to pre-rendered PNGs that compare layers for
-one branch. AutoTorch will display those PNGs directly.
+Per-layer Grad-CAM path columns are no longer required. If present, they can be
+empty. The internal layer order for each 2x2 montage should be:
+
+```text
+norm3
+block3_3
+block4_1
+norm4
+```
+
+Still use the pre-sigmoid logit as the Grad-CAM score, not post-sigmoid
+probability.
+
+Expected branch commands:
+
+```bash
+# Crop branch
+--branches crop --montage-only --skip-features --gpu 0
+
+# Ori branch
+--branches ori --montage-only --skip-features --gpu 1
+```
 
 ## Optional Feature Columns
 
@@ -297,19 +314,19 @@ required CSV plus Grad-CAM PNG paths.
 Write:
 
 ```text
-/mnt5/temp_jj/idrecapture_autotorch_viz/idrecapture_ench21/<dataset>/visualization_manifest.json
+/mnt5/temp_jj/<tf_vansmall_run_name>/visualization_manifest.json
 ```
 
 Use this schema:
 
 ```json
 {
-  "artifact_dir": "/mnt5/temp_jj/idrecapture_autotorch_viz/idrecapture_ench21/<dataset>",
-  "prepared_csv": "/mnt5/temp_jj/idrecapture_autotorch_viz/idrecapture_ench21/<dataset>/prepared_predictions.csv",
+  "artifact_dir": "/mnt5/temp_jj/<tf_vansmall_run_name>",
+  "prepared_csv": "/mnt5/temp_jj/<tf_vansmall_run_name>/prepared_predictions.csv",
   "source_csv": "/mnt3/auto-ekyc/idrecapture/artifacts/parallel/Ench21_v1_20251010-1106/infer_results/<dataset>/<dataset>.csv",
-  "model_key": "idrecapture_ench21_<dataset>",
+  "model_key": "<tf_vansmall_run_name>",
   "checkpoint": "/mnt3/auto-ekyc/idrecapture/artifacts/parallel/Ench21_v1_20251010-1106/parallel_Ench21_v1_20251007-0040_Ench21_v1_20251006-1529.h5",
-  "gradcam_dir": "/mnt5/temp_jj/idrecapture_autotorch_viz/idrecapture_ench21/<dataset>/gradcam",
+  "gradcam_dir": "/mnt5/temp_jj/<tf_vansmall_run_name>/montage",
   "image_column": "absolute_ori_path",
   "item_id_column": "uuid",
   "truth_column": "label",
@@ -327,10 +344,10 @@ After export, AutoTorch can consume the folder with this settings entry:
 
 ```json
 {
-  "key": "idrecapture_ench21_<dataset>",
-  "prediction_csv": "/mnt5/temp_jj/idrecapture_autotorch_viz/idrecapture_ench21/<dataset>/prepared_predictions.csv",
-  "feature_csv": "/mnt5/temp_jj/idrecapture_autotorch_viz/idrecapture_ench21/<dataset>/prepared_predictions.csv",
-  "artifact_dir": "/mnt5/temp_jj/idrecapture_autotorch_viz/idrecapture_ench21/<dataset>",
+  "key": "<tf_vansmall_run_name>",
+  "prediction_csv": "/mnt5/temp_jj/<tf_vansmall_run_name>/prepared_predictions.csv",
+  "feature_csv": "/mnt5/temp_jj/<tf_vansmall_run_name>/prepared_predictions.csv",
+  "artifact_dir": "/mnt5/temp_jj/<tf_vansmall_run_name>",
   "checkpoint": "",
   "weights_epoch": null,
   "model_type": "artifact_only",
@@ -355,12 +372,12 @@ AutoTorch will not load TensorFlow weights.
 
 The task is done when:
 
-1. `/mnt5/temp_jj/idrecapture_autotorch_viz/idrecapture_ench21/<dataset>/prepared_predictions.csv` exists.
+1. `/mnt5/temp_jj/<tf_vansmall_run_name>/prepared_predictions.csv` exists.
 2. The CSV has valid absolute image paths in `absolute_ori_path` and/or `absolute_ocr_path`.
 3. The CSV has numeric `tf_parallel_pred`.
 4. The CSV has `label`.
-5. The CSV has `tf_ori_gradcam_path` and/or `tf_crop_gradcam_path`.
-6. Grad-CAM path columns point to readable PNG overlay files.
+5. The CSV has `tf_crop_layer_montage_path` and/or `tf_ori_layer_montage_path`.
+6. Montage path columns point to readable PNG files.
 7. Optional: the CSV has `feature_0000...` columns for feature-space visualization.
 8. AutoTorch can open the exported artifact via:
 

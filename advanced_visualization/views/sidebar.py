@@ -29,6 +29,18 @@ def option_index(options: list, value, fallback: int = 0) -> int:
     return options.index(value) if value in options else fallback
 
 
+def configured_prediction_column(model_key: str, columns: list[str]) -> str | None:
+    if not model_key:
+        return None
+    active_model = all_model_runs().get(model_key)
+    if active_model and active_model.prediction_column in columns:
+        return active_model.prediction_column
+    for model in load_settings().models:
+        if model.key == model_key and model.prediction_column in columns:
+            return model.prediction_column
+    return None
+
+
 def sidebar_controls(df: pd.DataFrame) -> dict:
     settings = load_settings()
     review = settings.review
@@ -39,13 +51,12 @@ def sidebar_controls(df: pd.DataFrame) -> dict:
     artifact_dir = st.session_state.get("advanced_visualization_artifact_dir")
     active_csv_stem = st.session_state.get("advanced_visualization_active_csv_stem")
     manifest = load_manifest(Path(artifact_dir)) if artifact_dir else None
-    active_model = all_model_runs().get(str(active_csv_stem)) if active_csv_stem else None
 
     id_default = manifest.item_id_column if manifest and manifest.item_id_column in columns else first_existing(columns, ID_COLUMNS) or columns[0]
     image_default = manifest.image_column if manifest and manifest.image_column in image_columns else first_existing(columns, IMAGE_COLUMNS)
     subclass_default = manifest.subclass_column if manifest and manifest.subclass_column in cats else first_existing(columns, SUBCLASS_COLUMNS)
     truth_default = manifest.truth_column if manifest and manifest.truth_column in columns else ("label" if "label" in df.columns else subclass_default)
-    configured_pred_default = active_model.prediction_column if active_model and active_model.prediction_column in pred_columns else None
+    configured_pred_default = configured_prediction_column(str(active_csv_stem), pred_columns) if active_csv_stem else None
     pred_default = manifest.prediction_column if manifest and manifest.prediction_column in pred_columns else (configured_pred_default or (pred_columns[-1] if pred_columns else None))
     gradcam_candidates = [column for column in image_columns if GRADCAM_PATTERN.search(str(column))]
 
@@ -179,7 +190,8 @@ def sidebar_controls(df: pd.DataFrame) -> dict:
         )
         page_size_options = [12, 24, 48, 96, 144]
         page_size = st.select_slider("Page size", options=page_size_options, value=int(review.get("page_size", 48)))
-        columns_per_row = st.slider("Columns per row", 2, 8, int(review.get("columns_per_row", 6)))
+        columns_per_row = st.slider("Columns per row", 2, 10, int(review.get("columns_per_row", 6)))
+        show_card_metadata = st.checkbox("Show card metadata", value=bool(review.get("show_card_metadata", False)))
         sort_options = ["confidence desc", "confidence asc", "prediction desc", "prediction asc", "row order"]
         sort_by = st.selectbox(
             "Sort",
@@ -219,5 +231,6 @@ def sidebar_controls(df: pd.DataFrame) -> dict:
         "only_prepared_gradcam": only_prepared_gradcam,
         "page_size": page_size,
         "columns_per_row": columns_per_row,
+        "show_card_metadata": show_card_metadata,
         "sort_by": sort_by,
     }

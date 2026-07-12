@@ -181,19 +181,26 @@ In `idfraud/tfvan/model.py`, `Van(..., include_top=False)` returns the `norm4` o
 - dense/dropout head
 - `pred`
 
-The current default Grad-CAM config in `config/idrecapture_config.yml` uses `last_conv_layer: conv5_block3_out`, which is ResNet-specific and not correct for this Ench21 VAN Small model. For future Ench21 Grad-CAM, likely target candidates are:
+The current default Grad-CAM config in `config/idrecapture_config.yml` uses `last_conv_layer: conv5_block3_out`, which is ResNet-specific and not correct for this Ench21 VAN Small model. For the current AutoTorch handoff, compute a small multi-layer set and export branch montages:
 
-- submodel layer `norm4` for last spatial VAN feature map
-- possibly `block4.1` if targeting before final normalization
-- possibly nested attention/conv layers if a lower-level heatmap is wanted
+- `norm3`
+- `block3_3`
+- `block4_1`
+- `norm4`
 
-Need verify exact Keras layer access syntax after loading the H5, because `norm4` exists inside both `cropped_model` and `ori_model`. A future implementation should load the parallel model, then select:
+Use the pre-sigmoid logit as the Grad-CAM target score. Do not use
+post-sigmoid probability for VAN Small Grad-CAM because saturated predictions
+can produce near-zero sigmoid gradients.
+
+Need verify exact Keras layer access syntax after loading the H5, because these
+target layers exist inside both `cropped_model` and `ori_model`. The exporter
+should load the parallel model, then select branch-specific submodels:
 
 ```python
 parallel = tf.keras.models.load_model(path, custom_objects=...)
 crop_model = parallel.get_layer("cropped_model")
 ori_model = parallel.get_layer("ori_model")
-target = crop_model.get_layer("norm4")  # or ori_model.get_layer("norm4")
+target = crop_model.get_layer("norm3")  # or block3_3/block4_1/norm4
 ```
 
 Use custom objects when fully loading:
@@ -241,11 +248,13 @@ It writes:
 {model_dir}/infer_results/{dataset}/gradcam/heatmap_{dataset}.csv
 ```
 
-For the Ench21 VAN model, the user will likely want an improved path:
+For the Ench21 VAN model, the current improved path is:
 
-- target `norm4`, not `conv5_block3_out`
+- target `norm3`, `block3_3`, `block4_1`, and `norm4`, not `conv5_block3_out`
+- use pre-sigmoid logit as the Grad-CAM target score
 - support both ori and crop submodels
-- optionally generate overlay PNGs, not only `.npy`
+- generate one 2x2 montage PNG per branch/sample
+- do not preserve per-layer PNGs for the current delivery
 - support interactive item inspection similar to AutoTorch Streamlit app
 - consider Grad-CAM++ support like the reference app
 
@@ -304,10 +313,10 @@ Recommended pieces:
 
 2. Grad-CAM generator:
    - load target submodel
-   - target `norm4` by default
-   - class score is the sigmoid fraud score from `pred`
-   - allow `model_view`: `crop`, `ori`, and maybe `parallel`
-   - for parallel view, compute separate crop and ori CAMs, and display both because merged average is composed from both branches
+   - target `norm3`, `block3_3`, `block4_1`, and `norm4`
+   - class score is the pre-sigmoid fraud logit
+   - allow branch selection: `crop`, `ori`, or both
+   - write montage-only branch outputs under `/mnt5/temp_jj/<tf_vansmall_run_name>/montage/{crop,ori}/`
 
 3. Streamlit viewer:
    - can be adapted from `/home/jingjie/AutoTorch/advanced_visualization/views/feature_space.py`

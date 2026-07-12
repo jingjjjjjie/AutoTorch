@@ -409,6 +409,14 @@ def prepared_gradcam_path(path_value, model_key: str, method: str = "gradcam") -
 
 
 def active_prediction_column(df: pd.DataFrame) -> Optional[str]:
+    model_key = str(st.session_state.get("active_feature_model_key") or "")
+    if model_key and load_settings is not None:
+        for model in load_settings().models:
+            if model.key == model_key and model.prediction_column in df.columns:
+                return model.prediction_column
+    if "__prediction_column" in df.columns:
+        return "__prediction_column"
+
     candidates = [
         column
         for column in df.select_dtypes(include=[np.number]).columns
@@ -730,9 +738,9 @@ def add_prediction_columns(df: pd.DataFrame, prediction_column: Optional[str], t
     prediction = pd.to_numeric(df[prediction_column], errors="coerce")
     df[PRED_DISPLAY_COLUMN] = prediction
     df[PRED_BUCKET_COLUMN] = np.select(
-        [prediction.isna(), prediction.gt(threshold)],
-        ["missing pred", f"pred > {threshold:.2f}"],
-        default=f"pred <= {threshold:.2f}",
+        [prediction.isna(), prediction.ge(threshold)],
+        ["missing pred", f"pred >= {threshold:.2f}"],
+        default=f"pred < {threshold:.2f}",
     )
     return df
 

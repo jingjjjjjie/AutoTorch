@@ -2,33 +2,72 @@
 from __future__ import annotations
 
 import html
+from os import PathLike
 from typing import Optional
 
 import streamlit.components.v1 as components
 from PIL import Image
 
-from advanced_visualization.core.images import image_to_data_uri
+from advanced_visualization.core.images import (
+    DEFAULT_PREVIEW_MAX_SIDE,
+    DEFAULT_ZOOM_MAX_SIDE,
+    image_path_to_data_uri,
+    image_to_data_uri,
+)
 
 
-def render_zoomable_images(images: list[tuple[str, Optional[Image.Image]]]) -> bool:
-    available = [(label, image) for label, image in images if image is not None]
-    if not available:
-        return False
+ImageSource = Image.Image | str | PathLike[str]
 
+
+def _source_to_data_uri(source: Optional[ImageSource], *, max_side: int = DEFAULT_PREVIEW_MAX_SIDE) -> Optional[str]:
+    if source is None:
+        return None
+    if isinstance(source, Image.Image):
+        return image_to_data_uri(source)
+    return image_path_to_data_uri(source, max_side=max_side)
+
+
+def render_zoomable_images(
+    images: list[tuple[str, Optional[ImageSource]]],
+    *,
+    preview_height: int | None = None,
+    status_label: str = "",
+    status_kind: str = "",
+    index_label: str = "",
+) -> bool:
     panes = []
-    for label, image in available:
+    for label, source in images:
+        preview_uri = _source_to_data_uri(source, max_side=DEFAULT_PREVIEW_MAX_SIDE)
+        zoom_uri = _source_to_data_uri(source, max_side=DEFAULT_ZOOM_MAX_SIDE)
+        if preview_uri is None:
+            continue
+        data_uri = zoom_uri or preview_uri
         label_text = html.escape(label)
-        data_uri = image_to_data_uri(image)
+        status_text = html.escape(status_label)
+        status_class = "fail" if status_kind == "fail" else "pass"
+        index_text = html.escape(index_label)
+        tile_badges = ""
+        if status_text or index_text:
+            tile_badges = f"""
+              <span class="tile-badges">
+                <span class="tile-status {status_class}">{status_text}</span>
+                <span class="tile-index">{index_text}</span>
+              </span>
+            """
         panes.append(
             f"""
             <button class="zoom-thumb" data-src="{data_uri}" data-label="{label_text}" title="Open zoom viewer">
-              <img src="{data_uri}" alt="{label_text}" />
-              <span>{label_text}</span>
+              <img src="{preview_uri}" alt="{label_text}" />
+              {tile_badges}
+              <span class="tile-label">{label_text}</span>
             </button>
             """
         )
-    grid_class = "single" if len(available) == 1 else "split"
-    height = 250 if len(available) == 1 else 230
+    if not panes:
+        return False
+    grid_class = "single" if len(panes) == 1 else "split"
+    thumb_height = int(preview_height or (360 if len(panes) == 1 else 280))
+    height = thumb_height + 4
     components.html(
         f"""
         <style>
@@ -41,7 +80,7 @@ def render_zoomable_images(images: list[tuple[str, Optional[Image.Image]]]) -> b
           .zoom-grid {{
             display: grid;
             grid-template-columns: 1fr;
-            gap: 9px;
+            gap: 5px;
             width: 100%;
           }}
           .zoom-grid.split {{
@@ -51,9 +90,9 @@ def render_zoomable_images(images: list[tuple[str, Optional[Image.Image]]]) -> b
             position: relative;
             display: block;
             width: 100%;
-            height: 220px;
+            height: {thumb_height}px;
             border: 1px solid rgba(224,238,232,0.14);
-            border-radius: 6px;
+            border-radius: 5px;
             padding: 0;
             overflow: hidden;
             background: #0d1211;
@@ -65,7 +104,7 @@ def render_zoomable_images(images: list[tuple[str, Optional[Image.Image]]]) -> b
             background: #101716;
           }}
           .zoom-grid.split .zoom-thumb {{
-            height: 190px;
+            height: {thumb_height}px;
           }}
           .zoom-thumb img {{
             width: 100%;
@@ -75,17 +114,54 @@ def render_zoomable_images(images: list[tuple[str, Optional[Image.Image]]]) -> b
             user-select: none;
             -webkit-user-drag: none;
           }}
-          .zoom-thumb span {{
+          .tile-badges {{
             position: absolute;
-            left: 6px;
-            bottom: 6px;
-            max-width: calc(100% - 12px);
+            left: 5px;
+            right: 5px;
+            top: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 5px;
+            pointer-events: none;
+          }}
+          .tile-status,
+          .tile-index {{
+            min-width: 0;
             border-radius: 999px;
-            padding: 3px 8px;
+            padding: 2px 6px;
+            background: rgba(13,18,17,0.76);
+            border: 1px solid rgba(224,238,232,0.16);
+            color: rgba(238,246,242,0.86);
+            font-size: 10px;
+            font-weight: 680;
+            line-height: 1.2;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }}
+          .tile-status.fail {{
+            color: #ffe0dc;
+            border-color: rgba(255,138,128,0.34);
+            background: rgba(80,24,23,0.76);
+          }}
+          .tile-index {{
+            flex: 0 0 auto;
+            color: #eafaff;
+            border-color: rgba(92,200,215,0.42);
+            background: rgba(18,68,74,0.78);
+          }}
+          .zoom-thumb .tile-label {{
+            position: absolute;
+            left: 5px;
+            bottom: 5px;
+            max-width: calc(100% - 10px);
+            border-radius: 999px;
+            padding: 2px 6px;
             background: rgba(13,18,17,0.78);
             border: 1px solid rgba(224,238,232,0.16);
             color: rgba(238,246,242,0.82);
-            font-size: 11px;
+            font-size: 10px;
             line-height: 1.2;
             overflow: hidden;
             text-overflow: ellipsis;

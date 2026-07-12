@@ -2,17 +2,20 @@
 from __future__ import annotations
 
 import html
+from pathlib import Path
 from typing import Iterable
 
 import pandas as pd
 import streamlit as st
 
 from advanced_visualization.core.columns import categorical_columns, first_existing
-from advanced_visualization.core.config import ID_COLUMNS, SUBCLASS_COLUMNS
-from advanced_visualization.core.images import load_image, valid_image
+from advanced_visualization.core.config import ID_COLUMNS, SUBCLASS_COLUMNS, all_model_runs, gradcam_artifact_root
+from advanced_visualization.core.gradcam_cache import gradcam_file_index
+from advanced_visualization.core.images import image_cache_digests, valid_image
 from advanced_visualization.core.settings import load_settings
 from advanced_visualization.ui.components import (
     format_card_value,
+    preview_height,
     render_bottomless_controls,
     render_load_more,
     render_pager,
@@ -42,6 +45,19 @@ def _first_existing(columns: Iterable[str], candidates: Iterable[str]) -> str:
 
 def _path_exists(value) -> bool:
     return valid_image(value) is not None
+
+
+def _column_has_values(df: pd.DataFrame, column: str) -> bool:
+    if column not in df.columns:
+        return False
+    values = df[column].dropna().astype(str).str.strip()
+    return bool(values.ne("").any())
+
+
+@st.cache_data(show_spinner=False)
+def _cached_gradcam_index(root: str, method: str, modified_ns: int) -> dict[str, str]:
+    del modified_ns
+    return gradcam_file_index(root, method=method)
 
 
 def _branches(config: dict) -> list[dict]:
@@ -105,7 +121,7 @@ def _available_layers(df: pd.DataFrame, config: dict) -> list[dict]:
     available = []
     for layer in _layers(config):
         for branch in _branches(config):
-            if any(column in df.columns for column in gradcam_candidates(branch, layer, config)):
+            if any(_column_has_values(df, column) for column in gradcam_candidates(branch, layer, config)):
                 available.append(layer)
                 break
     return available or _layers(config)
@@ -119,6 +135,79 @@ def _branch_image_key(branch: dict) -> str:
     return f"{branch.get('key')}_image_column"
 
 
+def _source_prediction_column(source: dict, columns: list[str]) -> str:
+    model_key = str(source.get("model_key") or "")
+    model = all_model_runs().get(model_key) if model_key else None
+    if model and model.prediction_column in columns:
+        return model.prediction_column
+    for configured_model in load_settings().models:
+        if configured_model.key == model_key and configured_model.prediction_column in columns:
+            return configured_model.prediction_column
+    if "__prediction_column" in columns:
+        return "__prediction_column"
+    return ""
+
+
+def _gradcam_method(layer: dict, config: dict) -> str:
+    return str(layer.get("method") or config.get("method") or "gradcam")
+
+
+def _prepared_gradcam_roots(source: dict) -> list[Path]:
+    roots: list[Path] = []
+    artifact_dir = source.get("artifact_dir")
+    if artifact_dir:
+        roots.append(Path(artifact_dir).expanduser() / "gradcam")
+
+    model_key = str(source.get("model_key") or "")
+    if model_key:
+        root = gradcam_artifact_root(model_key)
+        if root is not None:
+            roots.append(root)
+
+    unique_roots = []
+    seen = set()
+    for root in roots:
+        key = str(root)
+        if key not in seen:
+            unique_roots.append(root)
+            seen.add(key)
+    return unique_roots
+
+
+def _has_prepared_gradcam_fallback(source: dict, layer: dict, config: dict) -> bool:
+    method = _gradcam_method(layer, config)
+    for root in _prepared_gradcam_roots(source):
+        if root.exists() and _cached_gradcam_index(str(root), method, root.stat().st_mtime_ns):
+            return True
+    return False
+
+
+def _prepared_gradcam_path(row: pd.Series, controls: dict, branch: dict) -> Path | None:
+    image_column = controls["image_columns"].get(branch["key"])
+    if not image_column or image_column not in row.index:
+        return None
+
+    method = _gradcam_method(controls["layer"], controls["config"])
+    for root in _prepared_gradcam_roots(controls["source"]):
+        if not root.exists():
+            continue
+        index = _cached_gradcam_index(str(root), method, root.stat().st_mtime_ns)
+        for digest in image_cache_digests(row[image_column]):
+            gradcam_path = index.get(digest)
+            if gradcam_path:
+                return Path(gradcam_path)
+    return None
+
+
+def resolved_gradcam_path(row: pd.Series, controls: dict, branch: dict) -> Path | str | None:
+    gradcam_column = first_existing_gradcam_column(pd.DataFrame([row]), branch, controls["layer"], controls["config"])
+    if gradcam_column in row.index:
+        path = valid_image(row[gradcam_column])
+        if path is not None:
+            return path
+    return _prepared_gradcam_path(row, controls, branch)
+
+
 def sidebar_controls(df: pd.DataFrame, source: dict, config: dict) -> dict:
     settings = load_settings()
     review = settings.review
@@ -130,7 +219,7 @@ def sidebar_controls(df: pd.DataFrame, source: dict, config: dict) -> dict:
     id_default = first_existing(columns, ID_COLUMNS) or columns[0]
     subclass_default = first_existing(columns, SUBCLASS_COLUMNS) or _first_existing(columns, config.get("metadata_columns", []))
     truth_default = "label" if "label" in columns else subclass_default
-    pred_default = _first_existing(columns, config.get("prediction_candidates", []))
+    pred_default = _source_prediction_column(source, columns) or _first_existing(columns, config.get("prediction_candidates", []))
     branch_labels = [_branch_label(branch) for branch in branches]
     target_options = branch_labels + (["All branches"] if len(branches) > 1 else [])
     default_layer_key = str(config.get("default_layer") or "")
@@ -143,7 +232,7 @@ def sidebar_controls(df: pd.DataFrame, source: dict, config: dict) -> dict:
         st.header(str(config.get("label") or "Layered Grad-CAM"))
         target = st.radio("Target", target_options, index=len(target_options) - 1 if "All branches" in target_options else 0)
         layer_label = st.radio("Layer", layer_labels, index=_option_index(layer_labels, default_layer_label))
-        only_prepared = st.checkbox("Only rows with selected Grad-CAM", value=True)
+        only_prepared = st.checkbox("Only rows with selected artifact", value=True)
 
         st.header("Columns")
         item_id_column = st.selectbox("Item ID", columns, index=columns.index(id_default))
@@ -189,7 +278,8 @@ def sidebar_controls(df: pd.DataFrame, source: dict, config: dict) -> dict:
         st.header("Layout")
         browse_mode = st.radio("Browse mode", ["Bottomless scroll", "Pages"], index=0, horizontal=True)
         page_size = st.select_slider("Page size", options=[12, 24, 48, 96], value=min(48, int(review.get("page_size", 48))))
-        columns_per_row = st.slider("Cards per row", 1, 4, 2)
+        columns_per_row = st.slider("Cards per row", 2, 8, 6)
+        show_card_metadata = st.checkbox("Show card metadata", value=False)
         sort_by = st.selectbox("Sort", ["confidence desc", "confidence asc", "prediction desc", "prediction asc", "row order"], index=0)
 
     if submitted:
@@ -224,6 +314,7 @@ def sidebar_controls(df: pd.DataFrame, source: dict, config: dict) -> dict:
         "browse_mode": browse_mode,
         "page_size": page_size,
         "columns_per_row": columns_per_row,
+        "show_card_metadata": show_card_metadata,
         "sort_by": sort_by,
     }
 
@@ -249,6 +340,8 @@ def apply_filters(df: pd.DataFrame, controls: dict) -> pd.DataFrame:
             column = first_existing_gradcam_column(filtered, branch, controls["layer"], controls["config"])
             if column in filtered.columns:
                 mask |= filtered[column].map(_path_exists)
+            else:
+                mask |= filtered.apply(lambda row: resolved_gradcam_path(row, controls, branch) is not None, axis=1)
         filtered = filtered[mask]
 
     sort_by = controls["sort_by"]
@@ -272,13 +365,15 @@ def render_summary(source: pd.DataFrame, filtered: pd.DataFrame, controls: dict)
         column = first_existing_gradcam_column(filtered, branch, controls["layer"], controls["config"])
         if column in filtered.columns:
             available += int(filtered[column].map(_path_exists).sum())
+        else:
+            available += int(filtered.apply(lambda row: resolved_gradcam_path(row, controls, branch) is not None, axis=1).sum())
 
     cols = st.columns(5)
     cols[0].metric("Rows shown", f"{len(filtered):,}", delta=f"from {len(source):,}")
     cols[1].metric("Scored rows", f"{len(scored):,}")
     cols[2].metric("Failures", f"{failures:,}", delta=f"{failure_rate:.1%}")
     cols[3].metric("Layer", _layer_label(controls["layer"]))
-    cols[4].metric("Prepared maps", f"{available:,}")
+    cols[4].metric("Prepared artifacts", f"{available:,}")
 
 
 def _metadata_line(row: pd.Series, controls: dict) -> str:
@@ -294,51 +389,73 @@ def _metadata_line(row: pd.Series, controls: dict) -> str:
     return " | ".join(fields)
 
 
-def _render_branch(row: pd.Series, controls: dict, branch: dict) -> None:
+def _render_branch(
+    row: pd.Series,
+    controls: dict,
+    branch: dict,
+    *,
+    status_label: str = "",
+    status_kind: str = "",
+    index_label: str = "",
+) -> None:
     image_column = controls["image_columns"].get(branch["key"])
-    gradcam_column = first_existing_gradcam_column(pd.DataFrame([row]), branch, controls["layer"], controls["config"])
-    original = load_image(row[image_column]) if image_column and image_column in row.index else None
-    gradcam = load_image(row[gradcam_column]) if gradcam_column in row.index else None
+    original_path = row[image_column] if image_column and image_column in row.index else None
+    gradcam_path = resolved_gradcam_path(row, controls, branch)
     label = f"{_branch_label(branch)} {_layer_label(controls['layer'])}"
 
     if controls["layer"].get("display") == "single":
-        if not render_zoomable_images([(label, gradcam)]):
+        if not render_zoomable_images(
+            [(label, gradcam_path)],
+            preview_height=preview_height(controls, 1),
+            status_label=status_label,
+            status_kind=status_kind,
+            index_label=index_label,
+        ):
             st.caption(f"No {label}")
         return
 
-    if not render_zoomable_images([(f"{_branch_label(branch)} image", original), (label, gradcam)]):
+    if not render_zoomable_images(
+        [(f"{_branch_label(branch)} image", original_path), (label, gradcam_path)],
+        preview_height=preview_height(controls, 2),
+        status_label=status_label,
+        status_kind=status_kind,
+        index_label=index_label,
+    ):
         st.caption(f"No {label}")
 
 
 def render_card(row: pd.Series, controls: dict, display_index: int) -> None:
     is_failure = bool(row.get("__is_failure", False))
-    pill_class = "fail-pill" if is_failure else "pass-pill"
-    pill_text = html.escape(str(row.get("__failure_type", "unscored")))
+    pill_text = str(row.get("__failure_type", "unscored"))
+    status_kind = "fail" if is_failure else "pass"
+    index_label = f"#{display_index}"
     item = html.escape(str(row.get(controls["item_id_column"], row.name)))
-    st.markdown(f'<span class="index-badge">#{display_index}</span> <span class="status-pill {pill_class}">{pill_text}</span>', unsafe_allow_html=True)
-    st.markdown(f'<div class="viewer-caption">{item}</div>', unsafe_allow_html=True)
 
     branches = controls["branches"]
     if len(branches) == 1:
-        _render_branch(row, controls, branches[0])
+        _render_branch(row, controls, branches[0], status_label=pill_text, status_kind=status_kind, index_label=index_label)
     else:
         columns = st.columns(len(branches))
         for column, branch in zip(columns, branches):
             with column:
-                _render_branch(row, controls, branch)
+                _render_branch(row, controls, branch, status_label=pill_text, status_kind=status_kind, index_label=index_label)
 
-    metadata = _metadata_line(row, controls)
-    if metadata:
-        st.caption(metadata)
+    if controls.get("show_card_metadata", False):
+        st.markdown(f'<div class="viewer-caption">{item}</div>', unsafe_allow_html=True)
+        metadata = _metadata_line(row, controls)
+        if metadata:
+            st.caption(metadata)
+    else:
+        st.markdown(f'<div class="viewer-caption compact">{item}</div>', unsafe_allow_html=True)
 
 
 def render_grid(df: pd.DataFrame, controls: dict, start_index: int = 1) -> None:
     rows = list(enumerate(df.iterrows(), start=start_index))
     for offset in range(0, len(rows), controls["columns_per_row"]):
-        columns = st.columns(controls["columns_per_row"])
+        columns = st.columns(controls["columns_per_row"], gap="small")
         for column, (display_index, (_index, row)) in zip(columns, rows[offset : offset + controls["columns_per_row"]]):
             with column:
-                with st.container(border=True):
+                with st.container(border=False):
                     render_card(row, controls, display_index)
 
 
@@ -360,9 +477,10 @@ def render(df: pd.DataFrame, source: dict, config: dict) -> None:
         first_existing_gradcam_column(df, branch, controls["layer"], config)
         for branch in controls["branches"]
         if first_existing_gradcam_column(df, branch, controls["layer"], config) not in df.columns
+        and not _has_prepared_gradcam_fallback(source, controls["layer"], config)
     ]
     if missing:
-        st.warning(f"Missing selected Grad-CAM column(s): {', '.join(missing)}")
+        st.warning(f"Missing selected artifact column(s): {', '.join(missing)}")
 
     filtered = apply_filters(df, controls)
     render_summary(df, filtered, controls)

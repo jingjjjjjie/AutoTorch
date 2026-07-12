@@ -104,15 +104,26 @@ Each config defines:
 
 - model type
 - branches, such as crop/ori/image
-- available Grad-CAM layers
-- Grad-CAM path column template or explicit column candidates
+- available Grad-CAM layers or montage outputs
+- Grad-CAM/montage path column template or explicit column candidates
 - default layer and prediction columns
 
 This is artifact-first. New model families normally do not need new Streamlit
 code if they export a prepared CSV with image paths, predictions, optional
-`feature_0000...` columns, and PNG explanation path columns. Add or edit an
-`extra_view_configs` entry when the model needs a different number of Grad-CAM
-layers or branches.
+`feature_0000...` columns, and PNG explanation path columns. A model can export
+single-layer Grad-CAM PNGs or pre-rendered montage PNGs. Add or edit an
+`extra_view_configs` entry when the model needs different branches, layer
+options, or montage columns.
+
+The current VAN Small TensorFlow handoff is montage-only. Its launch workspace
+expects:
+
+```text
+tf_crop_layer_montage_path
+tf_ori_layer_montage_path
+```
+
+Per-layer VAN Small Grad-CAM path columns are optional for this delivery.
 
 Each launched workspace provides its own model-specific clone of:
 

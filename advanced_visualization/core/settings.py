@@ -74,14 +74,14 @@ class UserModelConfig:
 DEFAULT_EXTRA_VIEW_CONFIGS = [
     {
         "model_type": "vansmall",
-        "label": "VAN Small Grad-CAM Review",
-        "description": "Branch and layer-specific logit Grad-CAM review for VAN Small artifacts.",
+        "label": "VAN Small Montage Review",
+        "description": "Crop/Ori VAN Small 2x2 logit Grad-CAM montage review.",
         "view": "layered_gradcam",
         "score": "logit",
         "column_template": "tf_{branch}_{layer}_{score}_gradcam_path",
         "required_columns": [
-            "tf_crop_norm3_logit_gradcam_path",
-            "tf_ori_norm3_logit_gradcam_path",
+            "tf_crop_layer_montage_path",
+            "tf_ori_layer_montage_path",
         ],
         "branches": [
             {
@@ -96,18 +96,19 @@ DEFAULT_EXTRA_VIEW_CONFIGS = [
             },
         ],
         "layers": [
-            {"key": "norm3", "label": "norm3 Recommended"},
-            {"key": "block3_3", "label": "block3.3"},
-            {"key": "block4_1", "label": "block4.1"},
-            {"key": "norm4", "label": "norm4"},
             {
                 "key": "montage",
-                "label": "montage",
+                "label": "2x2 layer montage",
                 "column_template": "tf_{branch}_layer_montage_path",
                 "display": "single",
             },
+            {"key": "norm3", "label": "norm3"},
+            {"key": "block3_3", "label": "block3.3"},
+            {"key": "block4_1", "label": "block4.1"},
+            {"key": "norm4", "label": "norm4"},
         ],
-        "prediction_candidates": ["tf_parallel_pred", "ypred_raw", "pred", "score"],
+        "default_layer": "montage",
+        "prediction_candidates": ["tf_parallel_pred", "tf_crop_pred", "tf_ori_pred", "ypred_raw", "pred", "score"],
         "metadata_columns": ["Recapture_Subclass", "Data_Identity", "Quality_Issue", "fraud_type"],
     },
     {

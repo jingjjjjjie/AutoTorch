@@ -10,7 +10,7 @@ import pandas as pd
 import streamlit as st
 
 from advanced_visualization.core.gradcam_cache import resolve_gradcam_path
-from advanced_visualization.core.images import load_image
+from advanced_visualization.core.images import valid_image
 from advanced_visualization.ui.zoom import render_zoomable_images
 
 def format_card_value(value) -> str:
@@ -139,6 +139,46 @@ def row_label(row: pd.Series, controls: dict) -> str:
     conf_text = f"conf={confidence:.3f}" if pd.notna(confidence) else "conf=-"
     return f"{item}\n{subclass}\n{score_text} | {conf_text}"
 
+
+def compact_row_label(row: pd.Series, controls: dict) -> str:
+    fields = []
+    if "Data_Identity" in row.index:
+        value = row.get("Data_Identity")
+        if pd.notna(value) and str(value):
+            fields.append(str(value))
+    subclass = row.get(controls["subclass_column"], "") if controls["subclass_column"] else ""
+    if pd.notna(subclass) and str(subclass):
+        fields.append(str(subclass))
+    if "Quality_Issue" in row.index:
+        value = row.get("Quality_Issue")
+        if pd.notna(value) and str(value):
+            fields.append(f"Q={format_card_value(value)}")
+    score = row.get("__prediction_score", np.nan)
+    if pd.notna(score):
+        fields.append(f"pred={float(score):.4f}")
+    if not fields:
+        fields.append(str(row.get(controls["item_id_column"], row.name)))
+    return " | ".join(fields)
+
+
+def compact_row_label_html(row: pd.Series, controls: dict) -> str:
+    text = compact_row_label(row, controls)
+    primary, separator, secondary = text.partition(" | ")
+    if not separator:
+        return html.escape(primary)
+    return (
+        f'<span class="caption-primary">{html.escape(primary)}</span>'
+        f'<span class="caption-secondary">{html.escape(secondary)}</span>'
+    )
+
+
+def preview_height(controls: dict, pane_count: int) -> int:
+    columns = int(controls.get("columns_per_row", 6))
+    if pane_count > 1:
+        return {2: 330, 3: 305, 4: 285, 5: 265, 6: 245, 7: 225, 8: 215, 9: 205, 10: 195}.get(columns, 245)
+    return {2: 540, 3: 470, 4: 400, 5: 355, 6: 310, 7: 285, 8: 260, 9: 240, 10: 225}.get(columns, 310)
+
+
 def render_image_cell(
     row: pd.Series,
     controls: dict,
@@ -146,57 +186,78 @@ def render_image_cell(
     display_index: Optional[int] = None,
 ) -> None:
     image_column = controls["image_column"]
-    original = load_image(row[image_column]) if image_column else None
+    original_path = row[image_column] if image_column else None
     view_mode = controls["view_mode"]
     gradcam_error = None
     if view_mode == "Original":
         gradcam_path = row.get("__gradcam_path") or resolve_gradcam_path(row, controls)
     else:
         gradcam_path, gradcam_error = gradcam_for_row(row, controls)
-    gradcam = load_image(gradcam_path) if gradcam_path else None
 
     is_failure = bool(row.get("__is_failure", False))
-    pill_class = "fail-pill" if is_failure else "pass-pill"
     pill_text = row.get("__failure_type", "unscored")
-    if display_index is not None:
-        st.markdown(f'<span class="index-badge">#{display_index}</span>', unsafe_allow_html=True)
-    st.markdown(f'<span class="status-pill {pill_class}">{pill_text}</span>', unsafe_allow_html=True)
+    index_label = f"#{display_index}" if display_index is not None else ""
+    status_kind = "fail" if is_failure else "pass"
 
     if view_mode == "Original":
-        if not render_zoomable_images([("Original", original)]):
+        if not render_zoomable_images(
+            [("Original", original_path)],
+            preview_height=preview_height(controls, 1),
+            status_label=str(pill_text),
+            status_kind=status_kind,
+            index_label=index_label,
+        ):
             st.caption("No image")
     elif view_mode == "Grad-CAM":
-        if not render_zoomable_images([("Grad-CAM", gradcam)]):
+        if not render_zoomable_images(
+            [("Grad-CAM", gradcam_path)],
+            preview_height=preview_height(controls, 1),
+            status_label=str(pill_text),
+            status_kind=status_kind,
+            index_label=index_label,
+        ):
             st.caption("No Grad-CAM")
             if gradcam_error:
                 st.caption(gradcam_error)
     else:
-        if not render_zoomable_images([("Original", original), ("Grad-CAM", gradcam)]):
+        if not render_zoomable_images(
+            [("Original", original_path), ("Grad-CAM", gradcam_path)],
+            preview_height=preview_height(controls, 2),
+            status_label=str(pill_text),
+            status_kind=status_kind,
+            index_label=index_label,
+        ):
             st.caption("Missing")
-        if original is None:
+        if valid_image(original_path) is None:
             st.caption("Original missing")
-        if gradcam is None:
+        if valid_image(gradcam_path) is None:
             st.caption("Grad-CAM missing")
             if gradcam_error:
                 st.caption(gradcam_error)
 
-    render_filter_tags(row, controls)
-    st.markdown(f'<div class="viewer-caption">{row_label(row, controls)}</div>', unsafe_allow_html=True)
-    if gradcam_path:
-        st.caption(Path(str(gradcam_path)).name)
+    if controls.get("show_card_metadata", False):
+        render_filter_tags(row, controls)
+        st.markdown(f'<div class="viewer-caption">{row_label(row, controls)}</div>', unsafe_allow_html=True)
+        if gradcam_path:
+            st.caption(Path(str(gradcam_path)).name)
+    else:
+        st.markdown(
+            f'<div class="viewer-caption compact">{compact_row_label_html(row, controls)}</div>',
+            unsafe_allow_html=True,
+        )
 
 def render_grid(page_df: pd.DataFrame, controls: dict, start_index: int = 1) -> None:
     cols_per_row = controls["columns_per_row"]
     rows = list(enumerate(page_df.iterrows(), start=start_index))
     for offset in range(0, len(rows), cols_per_row):
-        columns = st.columns(cols_per_row)
+        columns = st.columns(cols_per_row, gap="small")
         for column, (display_index, (_index, row)) in zip(columns, rows[offset : offset + cols_per_row]):
             with column:
-                with st.container(border=True):
+                with st.container(border=False):
                     render_image_cell(row, controls, display_index=display_index)
 
 def render_breakdowns(filtered: pd.DataFrame, controls: dict) -> None:
-    with st.expander("Breakdowns", expanded=True):
+    with st.expander("Breakdowns", expanded=False):
         columns = st.columns(2)
         with columns[0]:
             st.caption("Failure type")

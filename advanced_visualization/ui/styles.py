@@ -67,6 +67,12 @@ def inject_css() -> None:
             color: var(--text-main);
             font-weight: 720;
         }
+        div[data-testid="stHorizontalBlock"] {
+            gap: 0.45rem;
+        }
+        div[data-testid="column"] {
+            min-width: 0;
+        }
         div[data-testid="stButton"] > button {
             border-radius: 8px;
             border: 1px solid rgba(224,238,232,0.16);
@@ -81,7 +87,11 @@ def inject_css() -> None:
         div[data-testid="stVerticalBlockBorderWrapper"] {
             border-color: rgba(224,238,232,0.13);
             background: #121816;
+            border-radius: 6px;
             transition: border-color 150ms ease, background 150ms ease;
+        }
+        div[data-testid="stVerticalBlockBorderWrapper"] > div {
+            padding: 0.5rem 0.5rem 0.58rem;
         }
         div[data-testid="stVerticalBlockBorderWrapper"]:hover {
             border-color: rgba(92,200,215,0.30);
@@ -95,19 +105,47 @@ def inject_css() -> None:
             min-height: 100%;
         }
         .viewer-caption {
-            font-size: 12px;
+            font-size: 11px;
             color: var(--text-soft);
             overflow-wrap: anywhere;
-            line-height: 1.25;
-            margin-top: 6px;
-            padding-top: 6px;
+            line-height: 1.22;
+            margin-top: 5px;
+            padding-top: 5px;
             border-top: 1px solid rgba(224,238,232,0.08);
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .viewer-caption.compact {
+            font-size: 10.5px;
+            line-height: 1.15;
+            margin-top: 4px;
+            padding-top: 0;
+            border-top: 0;
+            display: block;
+            overflow: hidden;
+            color: rgba(238,246,242,0.64);
+        }
+        .viewer-caption.compact .caption-primary,
+        .viewer-caption.compact .caption-secondary {
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .viewer-caption.compact .caption-primary {
+            color: rgba(238,246,242,0.72);
+        }
+        .viewer-caption.compact .caption-secondary {
+            margin-top: 2px;
+            color: rgba(238,246,242,0.46);
         }
         .filter-strip {
             display: flex;
             flex-wrap: wrap;
-            gap: 4px;
-            margin: 7px 0 2px;
+            gap: 3px;
+            margin: 5px 0 1px;
         }
         .filter-chip {
             display: inline-flex;
@@ -117,8 +155,8 @@ def inject_css() -> None:
             border-radius: 999px;
             border: 1px solid rgba(92,200,215,0.18);
             background: rgba(92,200,215,0.08);
-            padding: 3px 7px;
-            font-size: 10.5px;
+            padding: 2px 5px;
+            font-size: 10px;
             line-height: 1.25;
             color: rgba(238,246,242,0.84);
         }
@@ -131,12 +169,12 @@ def inject_css() -> None:
         }
         .index-badge {
             float: right;
-            min-width: 30px;
+            min-width: 26px;
             text-align: center;
             border-radius: 999px;
-            padding: 2px 8px;
-            margin: 0 0 6px 6px;
-            font-size: 12px;
+            padding: 2px 6px;
+            margin: 0 0 4px 4px;
+            font-size: 10.5px;
             font-weight: 650;
             color: var(--text-main);
             background: rgba(92,200,215,0.16);
@@ -145,11 +183,15 @@ def inject_css() -> None:
         .status-pill {
             display: inline-block;
             border-radius: 999px;
-            padding: 3px 8px;
-            font-size: 11px;
+            padding: 2px 6px;
+            font-size: 10.5px;
             font-weight: 650;
             border: 1px solid rgba(255,255,255,0.16);
-            margin-right: 4px;
+            margin-right: 3px;
+            max-width: calc(100% - 36px);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         .fail-pill {
             color: #ffe0dc;

@@ -359,11 +359,27 @@ def find_default_column(columns: list[str], candidates: tuple[str, ...]) -> Opti
     return columns[0] if columns else None
 
 
-def image_from_path(path_value) -> Optional[Image.Image]:
+def image_path_candidates(path_value) -> list[Path]:
     if pd.isna(path_value):
-        return None
+        return []
     path = Path(str(path_value)).expanduser()
-    if not path.exists() or not path.is_file():
+    candidates = [path]
+    raw = str(path)
+    if raw.startswith("/routine_data/"):
+        candidates.append(Path("/mnt5") / raw.lstrip("/"))
+    return candidates
+
+
+def resolve_image_path(path_value) -> Optional[Path]:
+    for path in image_path_candidates(path_value):
+        if path.exists() and path.is_file():
+            return path
+    return None
+
+
+def image_from_path(path_value) -> Optional[Image.Image]:
+    path = resolve_image_path(path_value)
+    if path is None:
         return None
     try:
         return Image.open(path).convert("RGB")
@@ -449,6 +465,13 @@ def is_allowed_image_path(path: Path) -> bool:
     return any(resolved == root or root in resolved.parents for root in IMAGE_PROXY_ALLOWED_ROOTS)
 
 
+def allowed_resolved_image_path(path_value) -> Optional[Path]:
+    for path in image_path_candidates(path_value):
+        if is_allowed_image_path(path):
+            return path.expanduser().resolve()
+    return None
+
+
 def send_file_response(handler: BaseHTTPRequestHandler, path: Path, content_type: str, cache_control: str) -> None:
     try:
         data = path.read_bytes()
@@ -480,10 +503,11 @@ class ImageProxyHandler(BaseHTTPRequestHandler):
                 return
             method = query.get("method", ["gradcam"])[0]
             gradcam_path = prepared_gradcam_path(unquote(raw_image_path), model_key, method=method)
-            if gradcam_path is None or not is_allowed_image_path(gradcam_path):
+            resolved_gradcam_path = allowed_resolved_image_path(gradcam_path) if gradcam_path is not None else None
+            if resolved_gradcam_path is None:
                 self.send_error(404)
                 return
-            send_file_response(self, gradcam_path.expanduser().resolve(), "image/png", "public, max-age=3600")
+            send_file_response(self, resolved_gradcam_path, "image/png", "public, max-age=3600")
             return
 
         if parsed.path != "/image":
@@ -491,12 +515,11 @@ class ImageProxyHandler(BaseHTTPRequestHandler):
             return
 
         raw_path = query.get("path", [""])[0]
-        image_path = Path(unquote(raw_path))
-        if not is_allowed_image_path(image_path):
+        resolved = allowed_resolved_image_path(unquote(raw_path))
+        if resolved is None:
             self.send_error(404)
             return
 
-        resolved = image_path.expanduser().resolve()
         content_type = {
             ".jpg": "image/jpeg",
             ".jpeg": "image/jpeg",
@@ -1369,6 +1392,71 @@ def render_client_side_workspace(projected: pd.DataFrame, controls: dict) -> Non
         return `${{pageUrl.protocol}}//${{pageUrl.hostname}}:{IMAGE_PROXY_PORT}${{path}}`;
       }}
 
+      function proxyUrlCandidates(path) {{
+        if (!path) {{
+          return [];
+        }}
+        if (path.startsWith("http://") || path.startsWith("https://")) {{
+          return [path];
+        }}
+        const urls = [];
+        function addOrigin(raw) {{
+          if (!raw) {{
+            return;
+          }}
+          try {{
+            const parsed = new URL(raw);
+            if (parsed.protocol === "http:" || parsed.protocol === "https:") {{
+              urls.push(`${{parsed.protocol}}//${{parsed.hostname}}:{IMAGE_PROXY_PORT}${{path}}`);
+            }}
+          }} catch (error) {{}}
+        }}
+        addOrigin(document.referrer);
+        addOrigin(window.location.href);
+        try {{
+          addOrigin(window.parent.location.href);
+        }} catch (error) {{}}
+        try {{
+          addOrigin(window.top.location.href);
+        }} catch (error) {{}}
+        try {{
+          Array.from(window.location.ancestorOrigins || []).forEach(addOrigin);
+        }} catch (error) {{}}
+        ["localhost", "127.0.0.1"].forEach(function(host) {{
+          const protocol = urls.length > 0 && urls[0].startsWith("https:") ? "https:" : "http:";
+          urls.push(`${{protocol}}//${{host}}:{IMAGE_PROXY_PORT}${{path}}`);
+        }});
+        return Array.from(new Set(urls));
+      }}
+
+      function loadProxyImage(img, path, onLoad, onError) {{
+        const urls = proxyUrlCandidates(path);
+        let index = 0;
+        img.removeAttribute("src");
+        img.style.display = "none";
+        function tryNext() {{
+          if (index >= urls.length) {{
+            if (onError) {{
+              onError(urls);
+            }}
+            return;
+          }}
+          const url = urls[index];
+          index += 1;
+          img.onload = function() {{
+            img.style.display = "block";
+            if (onLoad) {{
+              onLoad(url);
+            }}
+          }};
+          img.onerror = function() {{
+            tryNext();
+          }};
+          img.src = url;
+        }}
+        tryNext();
+      }}
+
       function updateInspector(point) {{
         const data = point.customdata || [];
         activePoint = {{
@@ -1399,9 +1487,19 @@ def render_client_side_workspace(projected: pd.DataFrame, controls: dict) -> Non
         }}
         gradcamStatus.textContent = activeGradcamUrl ? "Prepared Grad-CAM available." : "No prepared Grad-CAM for this point.";
         if (activeImagePath) {{
-          selectedImage.src = proxyUrl(`/image?path=${{encodeURIComponent(activeImagePath)}}`);
-          selectedImage.style.display = "block";
-          imageWrap.classList.add("has-image");
+          selectedPath.textContent = activeImagePath;
+          imageWrap.classList.remove("has-image");
+          loadProxyImage(
+            selectedImage,
+            `/image?path=${{encodeURIComponent(activeImagePath)}}`,
+            function() {{
+              imageWrap.classList.add("has-image");
+            }},
+            function(urls) {{
+              selectedPath.textContent = `${{activeImagePath}} | image load failed: ${{urls.join(" , ")}}`;
+              imageWrap.classList.remove("has-image");
+            }}
+          );
         }} else {{
           selectedImage.removeAttribute("src");
           selectedImage.style.display = "none";
@@ -1439,15 +1537,16 @@ def render_client_side_workspace(projected: pd.DataFrame, controls: dict) -> Non
         gradcamTitle.textContent = label;
         gradcamWrap.style.display = "block";
         gradcamImage.style.display = "none";
-        gradcamImage.onload = function() {{
-          gradcamStatus.textContent = `Prepared ${{label}} loaded.`;
-          gradcamImage.style.display = "block";
-        }};
-        gradcamImage.onerror = function() {{
-          gradcamStatus.textContent = `Prepared ${{label}} failed to load.`;
-          gradcamImage.style.display = "none";
-        }};
-        gradcamImage.src = proxyUrl(url);
+        loadProxyImage(
+          gradcamImage,
+          url,
+          function() {{
+            gradcamStatus.textContent = `Prepared ${{label}} loaded.`;
+          }},
+          function(urls) {{
+            gradcamStatus.textContent = `Prepared ${{label}} failed to load: ${{urls.join(" , ")}}`;
+          }}
+        );
       }}
 
       if (gradcamButton) {{

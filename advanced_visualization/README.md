@@ -28,6 +28,11 @@ as `float32`, filtering and paging happen on the server, images are lazy-loaded,
 and generated thumbnails are cached. Feature projections are also cached by
 dataset version and projection parameters.
 
+Review and feature data use separate caches. Image review excludes embedding
+columns entirely, so opening a prepared CSV with hundreds of feature columns
+does not load the feature matrix. The matrix is loaded only when a projection is
+requested.
+
 Build the standalone web image with:
 
 ```bash

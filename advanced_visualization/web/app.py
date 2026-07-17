@@ -51,8 +51,10 @@ def _json_value(value: Any) -> str | int | float | bool | None:
     return str(value)
 
 
-def _image_url(source_id: str, row_id: int, column: str) -> str:
-    return f"/api/images/{source_id}/{row_id}?column={quote(column, safe='')}" if column else ""
+def _image_url(source_id: str, row_id: int, column: str, max_side: int = 480) -> str:
+    if not column:
+        return ""
+    return f"/api/images/{source_id}/{row_id}?column={quote(column, safe='')}&max_side={max_side}"
 
 
 @app.get("/api/health")
@@ -69,7 +71,7 @@ def sources() -> list[SourceSummary]:
 def schema(source_id: str) -> SchemaResponse:
     try:
         details = repository.schema(source_id)
-        frame = repository.dataframe(source_id)
+        frame = repository.review_dataframe(source_id)
     except (KeyError, FileNotFoundError) as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return SchemaResponse(
@@ -78,16 +80,24 @@ def schema(source_id: str) -> SchemaResponse:
         categorical_columns=details["categorical_columns"], image_columns=details["image_columns"],
         gradcam_columns=details["gradcam_columns"], feature_columns=details["feature_columns"],
         defaults=details["defaults"], categories=details["categories"],
+        image_availability=details["image_availability"],
     )
 
 
 @app.post("/api/review", response_model=PageResponse)
 def review(request: FilterRequest) -> dict:
     try:
-        frame = repository.dataframe(request.source_id)
+        frame = repository.review_dataframe(request.source_id)
     except (KeyError, FileNotFoundError) as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    filtered = filter_frame(frame, request)
+    requested_columns = {
+        "__row_id", request.item_id_column, request.subclass_column,
+        request.truth_column, request.prediction_column,
+        *request.search_columns, *request.categorical_filters.keys(),
+    }
+    requested_columns.discard("")
+    review_frame = frame.loc[:, [column for column in frame.columns if column in requested_columns]]
+    filtered = filter_frame(review_frame, request)
     page, metadata = page_frame(filtered, request)
     visible_columns = list(dict.fromkeys(filter(None, [
         request.item_id_column, request.subclass_column, request.truth_column,
@@ -118,25 +128,24 @@ def projection(request: ProjectionRequest) -> dict:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if request.image_column in frame.columns:
         for point in result["points"]:
-            point["image_url"] = _image_url(request.source_id, point["row_id"], request.image_column)
+            point["image_url"] = _image_url(request.source_id, point["row_id"], request.image_column, max_side=900)
     return result
 
 
 @app.get("/api/images/{source_id}/{row_id}")
 def image(source_id: str, row_id: int, column: str = Query(...), max_side: int = Query(900, ge=0, le=4096)) -> Response:
     try:
-        frame = repository.dataframe(source_id)
+        frame = repository.review_dataframe(source_id)
         schema_details = repository.schema(source_id)
     except (KeyError, FileNotFoundError) as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     allowed = set(schema_details["image_columns"])
     if column not in allowed:
         raise HTTPException(status_code=400, detail="Column is not an image-path column.")
-    match = frame[frame["__row_id"].eq(row_id)]
-    if match.empty:
+    if row_id < 0 or row_id >= len(frame) or int(frame.iloc[row_id]["__row_id"]) != row_id:
         raise HTTPException(status_code=404, detail="Row does not exist.")
     try:
-        content, etag = image_bytes(match.iloc[0][column], max_side=max_side)
+        content, etag = image_bytes(frame.iloc[row_id][column], max_side=max_side)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return Response(content, media_type="image/jpeg", headers={
@@ -150,6 +159,11 @@ app.mount("/assets", StaticFiles(directory=STATIC_DIR), name="assets")
 @app.get("/", include_in_schema=False)
 def index() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon() -> Response:
+    return Response(status_code=204)
 
 
 def main() -> None:

@@ -65,6 +65,7 @@ class SchemaResponse(BaseModel):
     feature_columns: list[str]
     defaults: dict[str, str]
     categories: dict[str, list[str]]
+    image_availability: dict[str, float]
 
 
 JsonValue = str | int | float | bool | None
@@ -84,4 +85,3 @@ class PageResponse(BaseModel):
     page_size: int
     metrics: dict[str, Any]
     rows: list[RowResponse]
-

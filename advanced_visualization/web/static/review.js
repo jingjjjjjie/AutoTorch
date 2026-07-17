@@ -114,5 +114,9 @@ export function bindReview(setBusy, showError) {
     byId("dialog-image").src = `${pane.dataset.image}&max_side=0`;
     byId("image-dialog").showModal();
   });
+  byId("gallery").addEventListener("error", event => {
+    if (event.target.tagName !== "IMG") return;
+    const pane = event.target.closest(".card-image");
+    if (pane) pane.innerHTML = '<div class="missing-image">Image file unavailable</div>';
+  }, true);
 }
-

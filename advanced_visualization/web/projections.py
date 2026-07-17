@@ -28,17 +28,20 @@ class ProjectionService:
         columns = [column for column in request.feature_columns if column in frame.columns]
         if not columns:
             raise ValueError("No valid feature columns were selected.")
-        key_data = request.model_dump(exclude={"source_id"}) | {"version": version}
+        if request.method == "pca" and len(columns) < 2:
+            raise ValueError("PCA requires at least two feature columns.")
+        key_data = request.model_dump() | {"version": version}
         key = hashlib.sha1(json.dumps(key_data, sort_keys=True).encode("utf-8")).hexdigest()
         with self._lock:
             if key in self._cache:
                 self._cache.move_to_end(key)
                 return self._cache[key]
 
-        numeric = frame[columns].apply(pd.to_numeric, errors="coerce")
+        candidate = frame.head(request.max_rows)
+        numeric = candidate[columns].apply(pd.to_numeric, errors="coerce")
         valid = numeric.notna().all(axis=1)
-        working = frame.loc[valid].head(request.max_rows)
-        matrix = numeric.loc[valid].head(request.max_rows).to_numpy(dtype=np.float32)
+        working = candidate.loc[valid]
+        matrix = numeric.loc[valid].to_numpy(dtype=np.float32)
         if len(matrix) < 3:
             raise ValueError("At least three complete feature rows are required.")
         if request.scale:
@@ -58,13 +61,13 @@ class ProjectionService:
             ).fit_transform(matrix)
 
         color_column = request.color_column if request.color_column in working.columns else ""
+        color_values = working[color_column].tolist() if color_column else ["All"] * len(working)
         points = []
-        for position, (_, row) in enumerate(working.iterrows()):
-            color = row[color_column] if color_column else "All"
+        for position, (row_id, color) in enumerate(zip(working["__row_id"].tolist(), color_values)):
             points.append({
                 "x": float(coords[position, 0]),
                 "y": float(coords[position, 1]),
-                "row_id": int(row["__row_id"]),
+                "row_id": int(row_id),
                 "label": "Missing" if pd.isna(color) else str(color),
             })
         result = {"method": request.method, "subtitle": subtitle, "rows": len(points), "points": points}
@@ -77,4 +80,3 @@ class ProjectionService:
 
 
 projection_service = ProjectionService()
-

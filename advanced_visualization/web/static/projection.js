@@ -17,8 +17,11 @@ function drawProjection() {
   context.scale(ratio, ratio);
   context.clearRect(0, 0, bounds.width, bounds.height);
   const points = state.projection.points;
-  const xs = points.map(point => point.x), ys = points.map(point => point.y);
-  const xMin = Math.min(...xs), xMax = Math.max(...xs), yMin = Math.min(...ys), yMax = Math.max(...ys);
+  let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
+  for (const point of points) {
+    xMin = Math.min(xMin, point.x); xMax = Math.max(xMax, point.x);
+    yMin = Math.min(yMin, point.y); yMax = Math.max(yMax, point.y);
+  }
   const pad = 28;
   const sx = value => pad + ((value - xMin) / (xMax - xMin || 1)) * (bounds.width - pad * 2);
   const sy = value => bounds.height - pad - ((value - yMin) / (yMax - yMin || 1)) * (bounds.height - pad * 2);
@@ -83,4 +86,3 @@ export function bindProjection(setBusy, showError) {
   byId("projection-canvas").addEventListener("click", event => { const { point } = nearestPoint(event); if (point) showPoint(point); });
   window.addEventListener("resize", drawProjection);
 }
-

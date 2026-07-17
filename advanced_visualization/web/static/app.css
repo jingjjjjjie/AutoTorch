@@ -59,6 +59,19 @@ h2 { margin-bottom: 2px; font-size: 12px; text-transform: uppercase; color: var(
 select, input[type="search"], input[type="number"] { width: 100%; min-height: 34px; padding: 6px 9px; color: var(--text); background: #181a18; border: 1px solid var(--line); border-radius: 4px; }
 select[multiple] { min-height: 90px; }
 input[type="range"] { width: 100%; accent-color: var(--accent); }
+.subclass-limits-panel { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.subclass-limits-panel summary { display: flex; gap: 6px; padding: 7px 0; color: var(--muted); font-size: 11px; cursor: pointer; }
+.subclass-limits-panel summary::before { content: "\25BE"; flex: 0 0 auto; color: var(--muted); }
+.subclass-limits-panel:not([open]) summary::before { content: "\25B8"; }
+.subclass-limits-panel summary span:first-child { margin-right: auto; color: var(--text); }
+.subclass-limit-list { max-height: 260px; overflow-y: auto; }
+.subclass-limit { display: grid; gap: 3px; padding: 7px 2px; }
+.subclass-limit + .subclass-limit { border-top: 1px solid #303430; }
+.subclass-limit-heading { display: flex; justify-content: space-between; gap: 8px; min-width: 0; color: var(--muted); font-size: 11px; }
+.subclass-limit-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.subclass-limit input[type="number"] { flex: 0 0 auto; width: 64px; min-height: 26px; padding: 2px 5px; text-align: right; font-size: 11px; font-variant-numeric: tabular-nums; }
+.subclass-limit-meta { color: var(--muted); font-size: 10px; text-align: right; }
+.subclass-limit-empty { padding: 8px 2px 10px; color: var(--muted); font-size: 11px; }
 .check { display: flex; align-items: center; gap: 8px; color: var(--muted); }
 .primary { min-height: 38px; border: 1px solid #71e4a8; border-radius: 4px; background: var(--accent); color: #102018; font-weight: 750; }
 .primary:hover { filter: brightness(1.06); }

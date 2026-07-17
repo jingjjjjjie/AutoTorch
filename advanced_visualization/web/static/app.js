@@ -3,6 +3,7 @@ import { bindImageViewer } from "./image-viewer.js";
 import { bindProjection, clearProjection } from "./projection.js";
 import { bindReview, loadReview } from "./review.js";
 import { setOptions, state } from "./state.js";
+import { refreshSubclassLimits } from "./subclass-limits.js";
 
 const byId = id => document.getElementById(id);
 const setBusy = busy => byId("loading").classList.toggle("hidden", !busy);
@@ -99,6 +100,7 @@ function filterGroup(column, index) {
       state.filterSelections.set(column, next);
       count.textContent = `${next.size}/${values.length}`;
       updateFilterCount();
+      refreshSubclassLimits();
     });
     const text = document.createElement("span");
     text.textContent = value;
@@ -120,6 +122,7 @@ function renderCategoricalFilters() {
   byId("add-filter-column").options[0].textContent = available.length ? "Choose column" : "All filters added";
   byId("add-filter-column").disabled = !available.length;
   updateFilterCount();
+  refreshSubclassLimits();
 }
 
 function populateControls(schema, preserveFilters = false) {

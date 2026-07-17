@@ -43,13 +43,20 @@ def _stable_sample(frame: pd.DataFrame, rows: int, random_state: int) -> pd.Data
 
 
 def _limit_per_class(
-    frame: pd.DataFrame, column: str, rows: int | None, random_state: int
+    frame: pd.DataFrame,
+    column: str,
+    default_rows: int | None,
+    rows_by_class: dict[str, int],
+    random_state: int,
 ) -> pd.DataFrame:
-    if rows is None:
+    if default_rows is None and not rows_by_class:
         return frame
     labels = _labels(frame, column)
-    group_indices = labels.groupby(labels, sort=True).groups.values()
-    sampled = [_stable_sample(frame.loc[index], rows, random_state) for index in group_indices]
+    sampled = []
+    for label, index in labels.groupby(labels, sort=True).groups.items():
+        group = frame.loc[index]
+        rows = rows_by_class.get(label, default_rows)
+        sampled.append(_stable_sample(group, rows, random_state) if rows is not None else group)
     return pd.concat(sampled).sort_index() if sampled else frame.iloc[0:0]
 
 
@@ -100,13 +107,18 @@ class ProjectionService:
             if not request.color_column or request.color_column not in candidate.columns:
                 raise ValueError("LDA requires a valid class/group column in Color by.")
             candidate = candidate[candidate[request.color_column].notna()]
-        if request.max_rows_per_class is not None and request.color_column not in candidate.columns:
+        has_class_limits = request.max_rows_per_class is not None or bool(request.max_rows_by_class)
+        if has_class_limits and request.color_column not in candidate.columns:
             raise ValueError("Per-class limit requires a valid Color by column.")
         candidate = candidate.loc[_complete_feature_mask(candidate, columns)]
         available_labels = _labels(candidate, request.color_column)
         available_counts = available_labels.value_counts().to_dict()
         working = _limit_per_class(
-            candidate, request.color_column, request.max_rows_per_class, request.random_state
+            candidate,
+            request.color_column,
+            request.max_rows_per_class,
+            request.max_rows_by_class,
+            request.random_state,
         )
         working = _stable_sample(working, request.max_rows, request.random_state)
         matrix = working[columns].to_numpy(dtype=np.float32)

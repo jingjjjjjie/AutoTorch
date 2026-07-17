@@ -285,6 +285,82 @@ def test_projection_limits_each_class_and_reports_counts() -> None:
         assert selected_two < selected_three
 
 
+def test_projection_applies_individual_class_limits() -> None:
+    groups = ["a"] * 6 + ["b"] * 5 + [None] * 4
+    frame = pd.DataFrame(
+        {
+            "__row_id": range(15),
+            "feature_0": np.arange(15, dtype=np.float32),
+            "feature_1": np.arange(15, dtype=np.float32) ** 2,
+            "group": groups,
+        }
+    )
+
+    result = ProjectionService().project(
+        frame,
+        ProjectionRequest(
+            source_id="source",
+            feature_columns=["feature_0", "feature_1"],
+            color_column="group",
+            max_rows=15,
+            max_rows_by_class={"a": 2, "b": 4, "Missing": 1},
+        ),
+        "version",
+    )
+
+    assert result["rows"] == 7
+    assert result["class_counts"] == [
+        {"label": "Missing", "available": 4, "displayed": 1},
+        {"label": "a", "available": 6, "displayed": 2},
+        {"label": "b", "available": 5, "displayed": 4},
+    ]
+
+
+def test_projection_individual_limit_overrides_shared_fallback() -> None:
+    frame = pd.DataFrame(
+        {
+            "__row_id": range(12),
+            "feature_0": np.arange(12, dtype=np.float32),
+            "feature_1": np.arange(12, dtype=np.float32) ** 2,
+            "group": ["a"] * 6 + ["b"] * 6,
+        }
+    )
+
+    result = ProjectionService().project(
+        frame,
+        ProjectionRequest(
+            source_id="source",
+            feature_columns=["feature_0", "feature_1"],
+            color_column="group",
+            max_rows=12,
+            max_rows_per_class=2,
+            max_rows_by_class={"a": 4},
+        ),
+        "version",
+    )
+
+    assert result["class_counts"] == [
+        {"label": "a", "available": 6, "displayed": 4},
+        {"label": "b", "available": 6, "displayed": 2},
+    ]
+
+    partial = ProjectionService().project(
+        frame,
+        ProjectionRequest(
+            source_id="source",
+            feature_columns=["feature_0", "feature_1"],
+            color_column="group",
+            max_rows=12,
+            max_rows_by_class={"a": 2, "absent": 1},
+        ),
+        "version",
+    )
+    assert partial["class_counts"] == [
+        {"label": "a", "available": 6, "displayed": 2},
+        {"label": "b", "available": 6, "displayed": 6},
+    ]
+
+
 def test_projection_class_limit_requires_color_column() -> None:
     frame = pd.DataFrame(
         {
@@ -302,6 +378,27 @@ def test_projection_class_limit_requires_color_column() -> None:
                 max_rows=4, max_rows_per_class=2,
             ),
             "version",
+        )
+
+    with pytest.raises(ValueError, match="valid Color by"):
+        ProjectionService().project(
+            frame,
+            ProjectionRequest(
+                source_id="source", feature_columns=["feature_0", "feature_1"],
+                max_rows=4, max_rows_by_class={"a": 2},
+            ),
+            "version",
+        )
+
+
+@pytest.mark.parametrize("limit", [0, 50001])
+def test_projection_rejects_invalid_individual_class_limits(limit: int) -> None:
+    with pytest.raises(ValueError):
+        ProjectionRequest(
+            source_id="source",
+            feature_columns=["feature_0", "feature_1"],
+            color_column="group",
+            max_rows_by_class={"a": limit},
         )
 
 
@@ -323,17 +420,41 @@ def test_projection_limits_complete_rows_without_underfilling_classes() -> None:
         frame,
         ProjectionRequest(
             source_id="source", feature_columns=["feature_0", "feature_1"],
-            color_column="group", max_rows=20, max_rows_per_class=3, random_state=2,
+            color_column="group", max_rows=20,
+            max_rows_by_class={"a": 2, "b": 3}, random_state=2,
         ),
         "version",
     )
 
     assert result["available_rows"] == 10
-    assert result["rows"] == 6
+    assert result["rows"] == 5
     assert result["class_counts"] == [
-        {"label": "a", "available": 5, "displayed": 3},
+        {"label": "a", "available": 5, "displayed": 2},
         {"label": "b", "available": 5, "displayed": 3},
     ]
+
+
+def test_projection_global_limit_remains_a_hard_ceiling() -> None:
+    frame = pd.DataFrame(
+        {
+            "__row_id": range(12),
+            "feature_0": np.arange(12, dtype=np.float32),
+            "feature_1": np.arange(12, dtype=np.float32) ** 2,
+            "group": ["a"] * 6 + ["b"] * 6,
+        }
+    )
+
+    result = ProjectionService().project(
+        frame,
+        ProjectionRequest(
+            source_id="source", feature_columns=["feature_0", "feature_1"],
+            color_column="group", max_rows=5, max_rows_by_class={"a": 4, "b": 4},
+        ),
+        "version",
+    )
+
+    assert result["rows"] == 5
+    assert all(item["displayed"] <= 4 for item in result["class_counts"])
 
 
 def test_lda_projection_supports_two_classes() -> None:

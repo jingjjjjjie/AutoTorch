@@ -2,6 +2,11 @@ import { getPoint, getProjection } from "./api.js";
 import { openImageViewer } from "./image-viewer.js";
 import { createScatterPlot } from "./scatter-plot.js";
 import { categoricalFilters, state } from "./state.js";
+import {
+  bindSubclassLimits,
+  projectionClassLimits,
+  updateSubclassAvailability,
+} from "./subclass-limits.js";
 
 const byId = id => document.getElementById(id);
 let plot = null;
@@ -97,44 +102,57 @@ async function showPoint(point, showError) {
   }
 }
 
+function projectionPayload(sourceId) {
+  return {
+    source_id: sourceId,
+    method: byId("projection-method").value,
+    feature_columns: state.schema.feature_columns,
+    color_column: byId("color-column").value,
+    categorical_filters: categoricalFilters(),
+    scale: byId("scale-features").checked,
+    max_rows: Number(byId("max-rows").value),
+    ...projectionClassLimits(),
+    perplexity: Number(byId("perplexity").value),
+    umap_neighbors: Number(byId("umap-neighbors").value),
+    umap_min_dist: Number(byId("umap-min-dist").value),
+  };
+}
+
 export async function loadProjection(setBusy, showError) {
   if (!state.source) return;
   const requestId = ++projectionRequest;
   const sourceId = state.source.id;
+  const request = projectionPayload(sourceId);
+  const requestFingerprint = JSON.stringify(request);
   resetProjectionView("Calculating projection...", "Calculating...");
   setBusy(true);
   try {
-    const maxRows = Number(byId("max-rows").value);
-    const classLimit = Number(byId("class-limit").value);
-    const colorColumn = byId("color-column").value;
-    const result = await getProjection({
-      source_id: sourceId,
-      method: byId("projection-method").value,
-      feature_columns: state.schema.feature_columns,
-      color_column: colorColumn,
-      categorical_filters: categoricalFilters(),
-      scale: byId("scale-features").checked,
-      max_rows: maxRows,
-      max_rows_per_class: colorColumn && classLimit < maxRows ? classLimit : null,
-      perplexity: Number(byId("perplexity").value),
-      umap_neighbors: Number(byId("umap-neighbors").value),
-      umap_min_dist: Number(byId("umap-min-dist").value),
-    });
+    const result = await getProjection(request);
     if (requestId !== projectionRequest || state.source.id !== sourceId) return;
+    if (JSON.stringify(projectionPayload(sourceId)) !== requestFingerprint) {
+      resetProjectionView("Controls changed. Run the projection again.", "Not projected");
+      showError("");
+      return;
+    }
     state.projection = result;
+    updateSubclassAvailability(result.class_counts);
     const countSummary = result.available_rows > result.rows
       ? `${result.rows.toLocaleString()} of ${result.available_rows.toLocaleString()} filtered points.`
       : `${result.rows.toLocaleString()} points.`;
     byId("projection-summary").textContent = `${countSummary} ${result.subtitle}`.trim();
-    plot.setData(result.points, colorColumn || "All points");
+    plot.setData(result.points, request.color_column || "All points");
     showError("");
   } catch (error) {
-    if (requestId === projectionRequest) {
-      resetProjectionView("Projection could not be generated.", "Not projected");
-      showError(error.message);
+    if (requestId === projectionRequest && state.source?.id === sourceId) {
+      const controlsChanged = JSON.stringify(projectionPayload(sourceId)) !== requestFingerprint;
+      resetProjectionView(
+        controlsChanged ? "Controls changed. Run the projection again." : "Projection could not be generated.",
+        "Not projected",
+      );
+      showError(controlsChanged ? "" : error.message);
     }
   } finally {
-    if (requestId === projectionRequest) setBusy(false);
+    if (requestId === projectionRequest && state.source?.id === sourceId) setBusy(false);
   }
 }
 
@@ -142,6 +160,11 @@ export function bindProjection(setBusy, showError) {
   plot = createScatterPlot({
     onPointSelect: point => showPoint(point, showError),
     onVisibleCount: updateDisplayedCount,
+  });
+  bindSubclassLimits(() => {
+    if (state.projection) {
+      byId("projection-summary").textContent = "Subclass limits changed. Run the projection to update.";
+    }
   });
   byId("feature-controls").addEventListener("submit", event => { event.preventDefault(); loadProjection(setBusy, showError); });
   byId("point-detail").addEventListener("click", event => {
@@ -156,21 +179,6 @@ export function bindProjection(setBusy, showError) {
   };
   byId("projection-method").addEventListener("change", updateMethodFields);
   updateMethodFields();
-  const syncClassLimit = () => {
-    const input = byId("max-rows");
-    const slider = byId("class-limit");
-    const previousMaximum = Number(slider.max);
-    const nextMaximum = Math.max(3, Math.min(50000, Number(input.value) || 5000));
-    const wasUnlimited = Number(slider.value) >= previousMaximum;
-    slider.max = String(nextMaximum);
-    slider.value = String(wasUnlimited ? nextMaximum : Math.min(Number(slider.value), nextMaximum));
-    byId("class-limit-value").value = Number(slider.value).toLocaleString();
-  };
-  byId("max-rows").addEventListener("input", syncClassLimit);
-  byId("class-limit").addEventListener("input", event => {
-    byId("class-limit-value").value = Number(event.target.value).toLocaleString();
-  });
-  syncClassLimit();
   byId("plot-fullscreen").addEventListener("click", () => {
     const layout = document.querySelector(".projection-layout");
     const fullscreen = layout.classList.toggle("fullscreen");

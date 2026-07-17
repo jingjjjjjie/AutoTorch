@@ -43,7 +43,9 @@ opens as a drawer on mobile.
 The feature canvas supports cursor-centered wheel zoom, drag-to-pan, reset,
 hover and click inspection, and clickable subclass visibility controls. Its
 sidebar reports the live visible-image count and can deterministically cap each
-active color subclass before applying the global projection-row limit.
+selected color subclass independently before applying the global projection-row
+limit. The shared subclass slider provides a quick baseline, with per-subclass
+sliders directly below it for targeted overrides.
 
 The image-review grid adapts its effective columns, preview height, and thumbnail
 resolution to the number and width of visible cards. Clicking any review or

@@ -1,7 +1,7 @@
 """Typed HTTP contracts for the visualization API."""
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -34,6 +34,9 @@ class FilterRequest(BaseModel):
     page_size: int = Field(default=48, ge=12, le=144)
 
 
+ClassRowLimit = Annotated[int, Field(ge=1, le=50000)]
+
+
 class ProjectionRequest(BaseModel):
     source_id: str
     method: Literal["pca", "tsne", "umap", "lda"] = "pca"
@@ -43,6 +46,7 @@ class ProjectionRequest(BaseModel):
     scale: bool = True
     max_rows: int = Field(default=5000, ge=3, le=50000)
     max_rows_per_class: int | None = Field(default=None, ge=1, le=50000)
+    max_rows_by_class: dict[str, ClassRowLimit] = Field(default_factory=dict)
     perplexity: int = Field(default=30, ge=2, le=100)
     umap_neighbors: int = Field(default=15, ge=2, le=200)
     umap_min_dist: float = Field(default=0.1, ge=0.0, le=0.99)

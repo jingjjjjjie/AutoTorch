@@ -1,0 +1,2 @@
+"""FastAPI-based visualization application."""
+

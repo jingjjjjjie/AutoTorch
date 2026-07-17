@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AutoTorch Visualization</title>
+  <link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">AT</span><strong>AutoTorch</strong><span>Visualization</span></div>
+    <div id="source-status" class="source-status">Loading sources</div>
+    <button id="filter-toggle" class="filter-toggle" type="button">Filters</button>
+  </header>
+
+  <main class="shell">
+    <aside id="sidebar" class="sidebar">
+      <label class="field"><span>Data source</span><select id="source-select"></select></label>
+      <nav class="tabs" aria-label="Views">
+        <button class="tab active" data-view="review">Image review</button>
+        <button class="tab" data-view="features">Feature space</button>
+      </nav>
+
+      <form id="review-controls" class="control-stack">
+        <section>
+          <h2>Columns</h2>
+          <label class="field"><span>Item ID</span><select id="item-column"></select></label>
+          <label class="field"><span>Image</span><select id="image-column"></select></label>
+          <label class="field"><span>Grad-CAM</span><select id="gradcam-column"></select></label>
+          <label class="field"><span>Group</span><select id="subclass-column"></select></label>
+          <label class="field"><span>Truth</span><select id="truth-column"></select></label>
+          <label class="field"><span>Prediction</span><select id="prediction-column"></select></label>
+        </section>
+        <section>
+          <h2>Failure logic</h2>
+          <label class="field"><span>Threshold <output id="threshold-value">0.50</output></span><input id="threshold" type="range" min="0" max="1" value="0.5" step="0.01"></label>
+          <label class="field"><span>Truth rows</span><select id="truth-rows">
+            <option value="all">All rows</option><option value="valid">Valid only</option>
+            <option value="positive">Positive only</option><option value="negative">Negative only</option>
+            <option value="invalid">Invalid only</option>
+          </select></label>
+          <label class="field"><span>Result</span><select id="failure-mode">
+            <option value="all">All rows</option><option value="failures">Failures only</option>
+            <option value="high_confidence">High-confidence failures</option>
+            <option value="low_confidence">Low-confidence failures</option>
+            <option value="false_positives">False positives</option>
+            <option value="false_negatives">False negatives</option><option value="correct">Correct only</option>
+          </select></label>
+        </section>
+        <section>
+          <h2>Find and filter</h2>
+          <label class="field"><span>Search</span><input id="search" type="search" placeholder="ID, group, label"></label>
+          <label class="field"><span>Filter column</span><select id="filter-column"></select></label>
+          <label class="field"><span>Filter values</span><select id="filter-values" multiple></select></label>
+        </section>
+        <section>
+          <h2>Display</h2>
+          <div class="segmented" id="image-mode">
+            <button type="button" class="active" data-value="original">Original</button>
+            <button type="button" data-value="gradcam">Grad-CAM</button>
+            <button type="button" data-value="both">Both</button>
+          </div>
+          <label class="field"><span>Sort</span><select id="sort">
+            <option value="confidence_desc">Confidence descending</option>
+            <option value="confidence_asc">Confidence ascending</option>
+            <option value="prediction_desc">Prediction descending</option>
+            <option value="prediction_asc">Prediction ascending</option>
+            <option value="row_order">Row order</option>
+          </select></label>
+          <label class="field"><span>Page size</span><select id="page-size">
+            <option>12</option><option>24</option><option selected>48</option><option>96</option><option>144</option>
+          </select></label>
+          <label class="field"><span>Cards per row <output id="grid-value">6</output></span><input id="grid-size" type="range" min="2" max="8" value="6"></label>
+        </section>
+        <button class="primary" type="submit">Apply filters</button>
+      </form>
+
+      <form id="feature-controls" class="control-stack hidden">
+        <section>
+          <h2>Projection</h2>
+          <label class="field"><span>Method</span><select id="projection-method"><option value="pca">PCA</option><option value="tsne">t-SNE</option></select></label>
+          <label class="field"><span>Color by</span><select id="color-column"></select></label>
+          <label class="field"><span>Image</span><select id="feature-image-column"></select></label>
+          <label class="field"><span>Maximum rows</span><input id="max-rows" type="number" min="3" max="50000" value="5000"></label>
+          <label class="check"><input id="scale-features" type="checkbox" checked><span>Standardize features</span></label>
+        </section>
+        <div id="feature-count" class="note"></div>
+        <button class="primary" type="submit">Run projection</button>
+      </form>
+    </aside>
+
+    <section class="workspace">
+      <div id="error-banner" class="error hidden"></div>
+      <div id="review-view">
+        <div id="metrics" class="metrics"></div>
+        <div class="workspace-heading"><div><h1>Image review</h1><p id="review-summary">Prepared model artifacts</p></div></div>
+        <div id="gallery" class="gallery" style="--grid-columns:6"></div>
+        <div class="pager"><button id="previous-page" type="button">Previous</button><span id="page-label"></span><button id="next-page" type="button">Next</button></div>
+      </div>
+
+      <div id="features-view" class="hidden">
+        <div class="workspace-heading"><div><h1>Feature space</h1><p id="projection-summary">Select a projection and run it.</p></div></div>
+        <div class="projection-layout">
+          <div class="canvas-wrap"><canvas id="projection-canvas"></canvas><div id="plot-tooltip" class="plot-tooltip hidden"></div></div>
+          <aside id="point-detail" class="point-detail"><div class="empty-state">Select a point to inspect its source image.</div></aside>
+        </div>
+        <div id="legend" class="legend"></div>
+      </div>
+      <div id="loading" class="loading hidden"><span></span>Loading</div>
+    </section>
+  </main>
+  <dialog id="image-dialog"><button id="close-dialog" aria-label="Close">Close</button><img id="dialog-image" alt="Full image preview"></dialog>
+  <script type="module" src="/assets/app.js"></script>
+</body>
+</html>

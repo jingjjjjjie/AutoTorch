@@ -1,5 +1,44 @@
 # AutoTorch Visualization
 
+## Fast Web App
+
+The recommended high-performance viewer is a browser application backed by
+FastAPI. It does not use Streamlit:
+
+```bash
+python -m advanced_visualization.web.app
+```
+
+Open `http://localhost:8000`.
+
+The implementation is intentionally separated by responsibility:
+
+```text
+advanced_visualization/web/app.py          HTTP routes only
+advanced_visualization/web/models.py       request/response contracts
+advanced_visualization/web/repository.py   source discovery and CSV cache
+advanced_visualization/web/filtering.py    review filtering and paging
+advanced_visualization/web/projections.py  PCA and t-SNE computation/cache
+advanced_visualization/web/images.py       image validation/thumbnails
+advanced_visualization/web/static/         browser interface
+```
+
+CSV dataframes are cached by file modification time, feature columns are loaded
+as `float32`, filtering and paging happen on the server, images are lazy-loaded,
+and generated thumbnails are cached. Feature projections are also cached by
+dataset version and projection parameters.
+
+Build the standalone web image with:
+
+```bash
+docker build -f advanced_visualization/Dockerfile.web -t autotorch-visualization-web .
+docker run --rm -p 8000:8000 \
+  -v /mnt5:/mnt5 -v /routine_data:/routine_data \
+  autotorch-visualization-web
+```
+
+## Legacy Streamlit App
+
 Unified Streamlit visualization for ID-fraud model review.
 
 Run:

@@ -3,12 +3,16 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import threading
 from collections import OrderedDict
+
+os.environ.setdefault("NUMBA_CACHE_DIR", "/tmp/autotorch_visualization_numba")
 
 import numpy as np
 import pandas as pd
 from sklearn.decomposition import PCA
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.manifold import TSNE
 from sklearn.preprocessing import StandardScaler
 
@@ -16,6 +20,7 @@ from advanced_visualization.web.models import ProjectionRequest
 
 
 MAX_TSNE_ROWS = 5000
+MAX_UMAP_ROWS = 50000
 
 
 class ProjectionService:
@@ -37,9 +42,22 @@ class ProjectionService:
                 self._cache.move_to_end(key)
                 return self._cache[key]
 
-        candidate = frame.head(request.max_rows)
+        candidate = frame
+        for column, values in request.categorical_filters.items():
+            if column not in candidate.columns:
+                continue
+            if not values:
+                candidate = candidate.iloc[0:0]
+                break
+            candidate = candidate[candidate[column].fillna("Missing").astype(str).isin(values)]
+        if len(candidate) > request.max_rows:
+            candidate = candidate.sample(n=request.max_rows, random_state=request.random_state).sort_index()
         numeric = candidate[columns].apply(pd.to_numeric, errors="coerce")
         valid = numeric.notna().all(axis=1)
+        if request.method == "lda":
+            if not request.color_column or request.color_column not in candidate.columns:
+                raise ValueError("LDA requires a valid class/group column in Color by.")
+            valid &= candidate[request.color_column].notna()
         working = candidate.loc[valid]
         matrix = numeric.loc[valid].to_numpy(dtype=np.float32)
         if len(matrix) < 3:
@@ -51,7 +69,7 @@ class ProjectionService:
             reducer = PCA(n_components=2, random_state=request.random_state)
             coords = reducer.fit_transform(matrix)
             subtitle = "Explained variance: " + ", ".join(f"{value:.1%}" for value in reducer.explained_variance_ratio_)
-        else:
+        elif request.method == "tsne":
             if len(matrix) > MAX_TSNE_ROWS:
                 raise ValueError(f"t-SNE is limited to {MAX_TSNE_ROWS} rows.")
             perplexity = min(request.perplexity, max(2, len(matrix) - 1))
@@ -59,6 +77,29 @@ class ProjectionService:
                 n_components=2, perplexity=perplexity, init="pca", learning_rate="auto",
                 random_state=request.random_state,
             ).fit_transform(matrix)
+        elif request.method == "umap":
+            if len(matrix) > MAX_UMAP_ROWS:
+                raise ValueError(f"UMAP is limited to {MAX_UMAP_ROWS} rows.")
+            try:
+                from umap import UMAP
+            except ImportError as exc:
+                raise ValueError("UMAP requires the umap-learn package.") from exc
+            coords = UMAP(
+                n_components=2,
+                n_neighbors=min(request.umap_neighbors, max(2, len(matrix) - 1)),
+                min_dist=request.umap_min_dist,
+                random_state=request.random_state,
+                n_jobs=1,
+            ).fit_transform(matrix)
+        else:
+            target = working[request.color_column].astype(str)
+            class_count = target.nunique()
+            if class_count < 2:
+                raise ValueError("LDA requires at least two classes after filtering.")
+            component_count = min(2, class_count - 1, matrix.shape[1])
+            coords = LinearDiscriminantAnalysis(n_components=component_count).fit_transform(matrix, target)
+            if component_count == 1:
+                coords = np.column_stack([coords[:, 0], np.zeros(len(coords), dtype=np.float32)])
 
         color_column = request.color_column if request.color_column in working.columns else ""
         color_values = working[color_column].tolist() if color_column else ["All"] * len(working)

@@ -179,6 +179,17 @@ class DatasetRepository:
             values = public[column].fillna("Missing").astype(str).unique()
             if len(values) <= 200:
                 categories[column] = sorted(values.tolist())
+        prepared_methods: list[str] = []
+        gradcam_root = source.artifact_dir / "gradcam" if source.artifact_dir else None
+        if gradcam_root and gradcam_root.is_dir():
+            for path in gradcam_root.glob("*.png"):
+                name = path.name.lower()
+                if "_gradcampp" in name and "gradcam++" not in prepared_methods:
+                    prepared_methods.append("gradcam++")
+                elif "_gradcam" in name and "gradcam" not in prepared_methods:
+                    prepared_methods.append("gradcam")
+                if len(prepared_methods) == 2:
+                    break
         details = {
             "source": source,
             "columns": columns,
@@ -190,6 +201,11 @@ class DatasetRepository:
             "defaults": defaults,
             "categories": categories,
             "image_availability": availability,
+            "default_filter_columns": [
+                column for column in settings.review.get("default_filter_columns", [])
+                if column in categories
+            ],
+            "prepared_gradcam_methods": prepared_methods,
         }
         with self._lock:
             self._schema_cache[source_id] = (*signature, details)

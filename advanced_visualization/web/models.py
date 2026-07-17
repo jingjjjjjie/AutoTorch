@@ -11,6 +11,7 @@ class FilterRequest(BaseModel):
     item_id_column: str = ""
     image_column: str = ""
     gradcam_column: str = ""
+    gradcam_method: Literal["gradcam", "gradcam++"] = "gradcam"
     subclass_column: str = ""
     truth_column: str = ""
     prediction_column: str = ""
@@ -35,13 +36,15 @@ class FilterRequest(BaseModel):
 
 class ProjectionRequest(BaseModel):
     source_id: str
-    method: Literal["pca", "tsne"] = "pca"
+    method: Literal["pca", "tsne", "umap", "lda"] = "pca"
     feature_columns: list[str] = Field(default_factory=list)
     color_column: str = ""
-    image_column: str = ""
+    categorical_filters: dict[str, list[str]] = Field(default_factory=dict)
     scale: bool = True
     max_rows: int = Field(default=5000, ge=3, le=50000)
     perplexity: int = Field(default=30, ge=2, le=100)
+    umap_neighbors: int = Field(default=15, ge=2, le=200)
+    umap_min_dist: float = Field(default=0.1, ge=0.0, le=0.99)
     random_state: int = 42
 
 
@@ -66,6 +69,8 @@ class SchemaResponse(BaseModel):
     defaults: dict[str, str]
     categories: dict[str, list[str]]
     image_availability: dict[str, float]
+    default_filter_columns: list[str]
+    prepared_gradcam_methods: list[str]
 
 
 JsonValue = str | int | float | bool | None

@@ -9,8 +9,10 @@
 <body>
   <header class="topbar">
     <div class="brand"><span class="brand-mark">AT</span><strong>AutoTorch</strong><span>Visualization</span></div>
-    <div id="source-status" class="source-status">Loading sources</div>
-    <button id="filter-toggle" class="filter-toggle" type="button">Filters</button>
+    <div class="top-actions">
+      <div id="source-status" class="source-status">Loading sources</div>
+      <button id="filter-toggle" class="filter-toggle" type="button" aria-expanded="true">Hide filters</button>
+    </div>
   </header>
 
   <main class="shell">
@@ -21,12 +23,22 @@
         <button class="tab" data-view="features">Feature space</button>
       </nav>
 
+      <section class="dataset-filters">
+        <div class="section-heading">
+          <h2>Dataset filters <span id="active-filter-count" class="count-badge">0</span></h2>
+          <button id="reset-filters" class="quiet-button" type="button">Reset</button>
+        </div>
+        <label class="field"><span>Add filter</span><select id="add-filter-column"></select></label>
+        <div id="categorical-filters" class="categorical-filters"></div>
+      </section>
+
       <form id="review-controls" class="control-stack">
         <section>
           <h2>Columns</h2>
           <label class="field"><span>Item ID</span><select id="item-column"></select></label>
           <label class="field"><span>Image</span><select id="image-column"></select></label>
           <label class="field"><span>Grad-CAM</span><select id="gradcam-column"></select></label>
+          <label class="field"><span>CAM method</span><select id="gradcam-method"><option value="gradcam">Grad-CAM</option><option value="gradcam++">Grad-CAM++</option></select></label>
           <label class="field"><span>Group</span><select id="subclass-column"></select></label>
           <label class="field"><span>Truth</span><select id="truth-column"></select></label>
           <label class="field"><span>Prediction</span><select id="prediction-column"></select></label>
@@ -48,10 +60,8 @@
           </select></label>
         </section>
         <section>
-          <h2>Find and filter</h2>
+          <h2>Find</h2>
           <label class="field"><span>Search</span><input id="search" type="search" placeholder="ID, group, label"></label>
-          <label class="field"><span>Filter column</span><select id="filter-column"></select></label>
-          <label class="field"><span>Filter values</span><select id="filter-values" multiple></select></label>
         </section>
         <section>
           <h2>Display</h2>
@@ -78,10 +88,16 @@
       <form id="feature-controls" class="control-stack hidden">
         <section>
           <h2>Projection</h2>
-          <label class="field"><span>Method</span><select id="projection-method"><option value="pca">PCA</option><option value="tsne">t-SNE</option></select></label>
+          <label class="field"><span>Method</span><select id="projection-method"><option value="pca">PCA</option><option value="tsne">t-SNE</option><option value="umap">UMAP</option><option value="lda">LDA</option></select></label>
           <label class="field"><span>Color by</span><select id="color-column"></select></label>
           <label class="field"><span>Image</span><select id="feature-image-column"></select></label>
+          <label class="field"><span>Grad-CAM</span><select id="feature-gradcam-column"></select></label>
           <label class="field"><span>Maximum rows</span><input id="max-rows" type="number" min="3" max="50000" value="5000"></label>
+          <label id="perplexity-field" class="field hidden"><span>Perplexity</span><input id="perplexity" type="number" min="2" max="100" value="30"></label>
+          <div id="umap-fields" class="method-fields hidden">
+            <label class="field"><span>Neighbors</span><input id="umap-neighbors" type="number" min="2" max="200" value="15"></label>
+            <label class="field"><span>Minimum distance</span><input id="umap-min-dist" type="number" min="0" max="0.99" step="0.01" value="0.1"></label>
+          </div>
           <label class="check"><input id="scale-features" type="checkbox" checked><span>Standardize features</span></label>
         </section>
         <div id="feature-count" class="note"></div>
@@ -99,7 +115,7 @@
       </div>
 
       <div id="features-view" class="hidden">
-        <div class="workspace-heading"><div><h1>Feature space</h1><p id="projection-summary">Select a projection and run it.</p></div></div>
+        <div class="workspace-heading"><div><h1>Feature space</h1><p id="projection-summary">Select a projection and run it.</p></div><button id="plot-fullscreen" class="quiet-button" type="button">Fullscreen</button></div>
         <div class="projection-layout">
           <div class="canvas-wrap"><canvas id="projection-canvas"></canvas><div id="plot-tooltip" class="plot-tooltip hidden"></div></div>
           <aside id="point-detail" class="point-detail"><div class="empty-state">Select a point to inspect its source image.</div></aside>

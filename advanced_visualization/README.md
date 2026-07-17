@@ -33,6 +33,13 @@ columns entirely, so opening a prepared CSV with hundreds of feature columns
 does not load the feature matrix. The matrix is loaded only when a projection is
 requested.
 
+The web viewer supports simultaneous categorical filters with multi-value
+checkboxes. Filters carry from a prepared source to its matching feature export.
+Feature Space provides PCA, t-SNE, UMAP, and LDA plus fullscreen plotting and a
+selected-point inspector for original images, prepared Grad-CAM, Grad-CAM++, and
+explicit montage artifacts. The filter sidebar can be collapsed on desktop and
+opens as a drawer on mobile.
+
 Build the standalone web image with:
 
 ```bash

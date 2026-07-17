@@ -1,16 +1,15 @@
 import { getReview } from "./api.js";
-import { selectedValues, state } from "./state.js";
+import { categoricalFilters, state } from "./state.js";
 
 const byId = id => document.getElementById(id);
 
 function requestPayload() {
-  const filterColumn = byId("filter-column").value;
-  const filters = filterColumn ? { [filterColumn]: selectedValues(byId("filter-values")) } : {};
   return {
     source_id: state.source.id,
     item_id_column: byId("item-column").value,
     image_column: byId("image-column").value,
     gradcam_column: byId("gradcam-column").value,
+    gradcam_method: byId("gradcam-method").value,
     subclass_column: byId("subclass-column").value,
     truth_column: byId("truth-column").value,
     prediction_column: byId("prediction-column").value,
@@ -19,7 +18,7 @@ function requestPayload() {
     failure_mode: byId("failure-mode").value,
     search: byId("search").value,
     search_columns: [byId("item-column").value, byId("subclass-column").value].filter(Boolean),
-    categorical_filters: filters,
+    categorical_filters: categoricalFilters(),
     sort: byId("sort").value,
     page: state.page,
     page_size: Number(byId("page-size").value),
@@ -111,7 +110,7 @@ export function bindReview(setBusy, showError) {
   byId("gallery").addEventListener("click", event => {
     const pane = event.target.closest("[data-image]");
     if (!pane) return;
-    byId("dialog-image").src = `${pane.dataset.image}&max_side=0`;
+    byId("dialog-image").src = pane.dataset.image.replace(/([?&])max_side=\d+/, "$1max_side=0");
     byId("image-dialog").showModal();
   });
   byId("gallery").addEventListener("error", event => {

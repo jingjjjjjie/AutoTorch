@@ -221,6 +221,72 @@ def test_tsne_projection() -> None:
     assert all(np.isfinite(point["x"]) for point in result["points"])
 
 
+def test_projection_filters_before_deterministic_sampling() -> None:
+    frame = pd.DataFrame(
+        {
+            "__row_id": range(20),
+            "feature_0": np.arange(20, dtype=np.float32),
+            "feature_1": np.arange(20, dtype=np.float32) ** 2,
+            "group": ["a"] * 10 + ["b"] * 10,
+        }
+    )
+    request = ProjectionRequest(
+        source_id="source", feature_columns=["feature_0", "feature_1"],
+        color_column="group", categorical_filters={"group": ["a"]}, max_rows=5,
+    )
+
+    result = ProjectionService().project(frame, request, "version")
+
+    assert result["rows"] == 5
+    assert {point["label"] for point in result["points"]} == {"a"}
+    assert all(point["row_id"] < 10 for point in result["points"])
+    assert [point["row_id"] for point in result["points"]] != list(range(5))
+
+
+def test_lda_projection_supports_two_classes() -> None:
+    frame = pd.DataFrame(
+        {
+            "__row_id": range(8),
+            "feature_0": [0.0, 0.2, 0.1, 0.3, 4.0, 4.2, 4.1, 4.3],
+            "feature_1": [0.1, 0.0, 0.3, 0.2, 4.1, 4.0, 4.3, 4.2],
+            "group": ["a"] * 4 + ["b"] * 4,
+        }
+    )
+    result = ProjectionService().project(
+        frame,
+        ProjectionRequest(
+            source_id="source", method="lda", feature_columns=["feature_0", "feature_1"],
+            color_column="group", max_rows=8,
+        ),
+        "version",
+    )
+
+    assert result["rows"] == 8
+    assert all(point["y"] == 0.0 for point in result["points"])
+
+
+def test_umap_projection() -> None:
+    pytest.importorskip("umap")
+    frame = pd.DataFrame(
+        {
+            "__row_id": range(12),
+            "feature_0": np.linspace(0, 1, 12),
+            "feature_1": np.linspace(1, 0, 12),
+        }
+    )
+    result = ProjectionService().project(
+        frame,
+        ProjectionRequest(
+            source_id="source", method="umap", feature_columns=["feature_0", "feature_1"],
+            umap_neighbors=4, max_rows=12,
+        ),
+        "version",
+    )
+
+    assert result["rows"] == 12
+    assert all(np.isfinite(point["x"]) for point in result["points"])
+
+
 def test_image_service_creates_bounded_jpeg(tmp_path: Path) -> None:
     from PIL import Image
 
@@ -254,7 +320,15 @@ def test_http_routes_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
             "feature_0": [0.0, 1.0, 2.0], "feature_1": [2.0, 1.0, 0.0],
         }
     ).to_csv(csv_path, index=False)
-    fixed = FixedRepository(DataSource("source", "Source", csv_path, "model", None))
+    artifact_dir = tmp_path / "artifact"
+    gradcam_dir = artifact_dir / "gradcam"
+    gradcam_dir.mkdir(parents=True)
+    from advanced_visualization.core.images import image_cache_digest
+
+    digest = image_cache_digest(image_path)
+    Image.new("RGB", (30, 20), color=(180, 40, 30)).save(gradcam_dir / f"{digest}_gradcam_logit.png")
+    Image.new("RGB", (30, 20), color=(30, 180, 40)).save(gradcam_dir / f"{digest}_gradcampp_logit.png")
+    fixed = FixedRepository(DataSource("source", "Source", csv_path, "model", artifact_dir))
     monkeypatch.setattr(web_app, "repository", fixed)
 
     assert web_app.health() == {"status": "ok"}
@@ -262,6 +336,7 @@ def test_http_routes_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     assert web_app.sources()[0].id == "source"
     schema_response = web_app.schema("source")
     assert schema_response.feature_columns == ["feature_0", "feature_1"]
+    assert set(schema_response.prepared_gradcam_methods) == {"gradcam", "gradcam++"}
 
     review_response = web_app.review(
         FilterRequest(
@@ -271,6 +346,7 @@ def test_http_routes_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     )
     first_row = review_response["rows"][0]
     assert first_row["image_url"].endswith("max_side=480")
+    assert "/api/gradcam/" in first_row["gradcam_url"]
     image_response = web_app.image("source", first_row["row_id"], "image_path", 480)
     assert image_response.media_type == "image/jpeg"
 
@@ -278,10 +354,21 @@ def test_http_routes_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
         web_app.image("source", 99, "image_path", 480)
     assert missing.value.status_code == 404
 
+    detail = web_app.point_detail(
+        "source", first_row["row_id"], "image_path", "", "id", "score", "label"
+    )
+    assert detail["values"]["id"] in {"a", "b", "c"}
+    assert "/api/gradcam/" in detail["gradcam_url"]
+    assert "method=gradcam%2B%2B" in detail["gradcam_plus_url"]
+    cam_response = web_app.prepared_gradcam(
+        "source", first_row["row_id"], "image_path", "gradcam", 200
+    )
+    assert cam_response.media_type == "image/jpeg"
+
     projection_response = web_app.projection(
         ProjectionRequest(
             source_id="source", feature_columns=["feature_0", "feature_1"],
-            image_column="image_path", max_rows=3,
+            max_rows=3,
         )
     )
     assert projection_response["rows"] == 3

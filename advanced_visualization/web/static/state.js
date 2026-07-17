@@ -6,6 +6,8 @@ export const state = {
   pages: 1,
   imageMode: "original",
   projection: null,
+  filterSelections: new Map(),
+  activeFilterColumns: [],
 };
 
 export function setOptions(select, values, preferred = "", allowNone = true, labels = {}) {
@@ -15,6 +17,12 @@ export function setOptions(select, values, preferred = "", allowNone = true, lab
   select.value = values.includes(preferred) ? preferred : (allowNone ? "" : values[0] || "");
 }
 
-export function selectedValues(select) {
-  return [...select.selectedOptions].map(option => option.value);
+export function categoricalFilters() {
+  const filters = {};
+  for (const column of state.activeFilterColumns) {
+    const allValues = state.schema.categories[column] || [];
+    const selected = state.filterSelections.get(column) || new Set(allValues);
+    if (selected.size !== allValues.length) filters[column] = [...selected];
+  }
+  return filters;
 }

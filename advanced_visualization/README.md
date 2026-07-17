@@ -18,7 +18,7 @@ advanced_visualization/web/app.py          HTTP routes only
 advanced_visualization/web/models.py       request/response contracts
 advanced_visualization/web/repository.py   source discovery and CSV cache
 advanced_visualization/web/filtering.py    review filtering and paging
-advanced_visualization/web/projections.py  PCA and t-SNE computation/cache
+advanced_visualization/web/projections.py  projection computation/cache
 advanced_visualization/web/images.py       image validation/thumbnails
 advanced_visualization/web/static/         browser interface
 ```
@@ -39,6 +39,12 @@ Feature Space provides PCA, t-SNE, UMAP, and LDA plus fullscreen plotting and a
 selected-point inspector for original images, prepared Grad-CAM, Grad-CAM++, and
 explicit montage artifacts. The filter sidebar can be collapsed on desktop and
 opens as a drawer on mobile.
+
+The image-review grid adapts its effective columns, preview height, and thumbnail
+resolution to the number and width of visible cards. Clicking any review or
+feature-inspector image opens the shared zoom viewer with wheel, button,
+double-click, keyboard, and drag-to-pan controls. The viewer loads a 2K preview
+first and requests 4K detail only after zooming in.
 
 Build the standalone web image with:
 

@@ -10,6 +10,9 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from advanced_visualization.core.images import valid_image
 
 
+MAX_CACHED_SIDE = 1440
+
+
 def _render_image(path: str, max_side: int) -> bytes:
     try:
         with Image.open(path) as image:
@@ -35,6 +38,6 @@ def image_bytes(path_value, max_side: int = 900) -> tuple[bytes, str]:
         raise FileNotFoundError("Image does not exist or has an unsupported format.")
     resolved = Path(path).resolve()
     stat = resolved.stat()
-    if max_side == 0:
+    if max_side == 0 or max_side > MAX_CACHED_SIDE:
         return _render_image(str(resolved), max_side), str(stat.st_mtime_ns)
     return _thumbnail(str(resolved), stat.st_mtime_ns, stat.st_size, max_side), str(stat.st_mtime_ns)

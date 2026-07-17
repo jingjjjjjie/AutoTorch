@@ -301,6 +301,33 @@ def test_image_service_creates_bounded_jpeg(tmp_path: Path) -> None:
     assert decoded.size == (200, 100)
 
 
+def test_image_service_does_not_memory_cache_large_previews(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from PIL import Image
+    from advanced_visualization.web import images
+
+    path = tmp_path / "source.png"
+    Image.new("RGB", (20, 20)).save(path)
+    cached_sizes: list[int] = []
+    rendered_sizes: list[int] = []
+    monkeypatch.setattr(
+        images,
+        "_thumbnail",
+        lambda _path, _modified, _size, max_side: cached_sizes.append(max_side) or b"cached",
+    )
+    monkeypatch.setattr(
+        images,
+        "_render_image",
+        lambda _path, max_side: rendered_sizes.append(max_side) or b"rendered",
+    )
+
+    assert images.image_bytes(path, max_side=images.MAX_CACHED_SIDE)[0] == b"cached"
+    assert images.image_bytes(path, max_side=images.MAX_CACHED_SIDE + 1)[0] == b"rendered"
+    assert cached_sizes == [images.MAX_CACHED_SIDE]
+    assert rendered_sizes == [images.MAX_CACHED_SIDE + 1]
+
+
 def test_image_service_rejects_missing_file(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         image_bytes(tmp_path / "missing.png")

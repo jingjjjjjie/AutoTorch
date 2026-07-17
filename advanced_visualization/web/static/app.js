@@ -1,4 +1,5 @@
 import { getSchema, getSources } from "./api.js";
+import { bindImageViewer } from "./image-viewer.js";
 import { bindProjection } from "./projection.js";
 import { bindReview, loadReview } from "./review.js";
 import { setOptions, state } from "./state.js";
@@ -205,11 +206,11 @@ function bindSidebar() {
     if (isMobile()) {
       sidebar.classList.toggle("mobile-open", open);
       shell.classList.remove("sidebar-collapsed");
-      button.textContent = open ? "Close" : "Filters";
+      button.textContent = open ? "Close sidebar" : "Open sidebar";
     } else {
       shell.classList.toggle("sidebar-collapsed", !open);
       sidebar.classList.remove("mobile-open");
-      button.textContent = open ? "Hide filters" : "Show filters";
+      button.textContent = open ? "Hide sidebar" : "Show sidebar";
       localStorage.setItem("autotorch-sidebar-open", String(open));
     }
     button.setAttribute("aria-expanded", String(open));
@@ -234,6 +235,7 @@ function bindSidebar() {
 async function start() {
   bindReview(setBusy, showError);
   bindProjection(setBusy, showError);
+  bindImageViewer();
   bindNavigation();
   bindSidebar();
   byId("add-filter-column").addEventListener("change", event => {
@@ -243,7 +245,6 @@ async function start() {
   });
   byId("reset-filters").addEventListener("click", () => initializeCategoricalFilters(state.schema, false));
   byId("source-select").addEventListener("change", event => selectSource(event.target.value));
-  byId("close-dialog").addEventListener("click", () => byId("image-dialog").close());
   setBusy(true);
   try {
     state.sources = await getSources();

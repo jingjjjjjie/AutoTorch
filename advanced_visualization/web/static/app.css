@@ -73,7 +73,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .metric span { color: var(--muted); font-size: 11px; text-transform: uppercase; }
 .gallery { display: grid; grid-template-columns: repeat(var(--grid-columns), minmax(0, 1fr)); gap: 8px; align-items: start; }
 .card { min-width: 0; overflow: hidden; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
-.card-images { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; height: 220px; background: #101110; }
+.card-images { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; height: var(--card-media-height, 310px); background: #101110; }
 .card-image { position: relative; min-width: 0; border: 0; padding: 0; background: #101110; overflow: hidden; }
 .card-image + .card-image { border-left: 1px solid var(--line); }
 .card-image img { width: 100%; height: 100%; object-fit: contain; display: block; }
@@ -109,15 +109,25 @@ body:has(.projection-layout.fullscreen) #plot-fullscreen { position: fixed; top:
 .inspector-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
 .inspector-actions button.active { color: #102018; background: var(--accent); border-color: var(--accent); }
 .inspector-image { cursor: zoom-in; }
-.empty-state { color: var(--muted); padding: 24px 8px; text-align: center; }
+.empty-state { grid-column: 1 / -1; color: var(--muted); padding: 24px 8px; text-align: center; }
 .plot-tooltip { position: absolute; pointer-events: none; padding: 5px 7px; background: #0e100e; border: 1px solid var(--line); font-size: 11px; border-radius: 3px; }
 .legend { display: flex; flex-wrap: wrap; gap: 10px; padding: 10px 0; color: var(--muted); font-size: 11px; }
 .legend-item { display: flex; align-items: center; gap: 5px; }
 .legend-swatch { width: 9px; height: 9px; border-radius: 50%; }
-dialog { width: min(96vw, 1500px); height: min(94vh, 1000px); padding: 42px 10px 10px; background: #0c0d0c; border: 1px solid var(--line); }
+dialog { width: min(98vw, 1800px); height: 96vh; max-width: none; max-height: none; padding: 0; overflow: hidden; background: #0c0d0c; border: 1px solid var(--line); }
 dialog::backdrop { background: rgba(0,0,0,.78); }
-dialog img { width: 100%; height: 100%; object-fit: contain; }
-dialog button { position: absolute; right: 10px; top: 8px; }
+.dialog-shell { display: grid; grid-template-rows: 48px minmax(0, 1fr); width: 100%; height: 100%; }
+.dialog-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; padding: 6px 8px 6px 14px; border-bottom: 1px solid var(--line); background: #151715; }
+.dialog-toolbar strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.dialog-actions { display: flex; flex: 0 0 auto; gap: 5px; }
+.viewer-button { position: static; display: grid; place-items: center; width: 34px; height: 34px; min-height: 34px; padding: 0; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; font-size: 18px; }
+.viewer-button:hover { background: #343834; }
+.viewer-button:disabled { cursor: default; opacity: .4; }
+.viewer-button.zoom-level { width: 58px; font-size: 11px; }
+.dialog-viewport { position: relative; display: grid; place-items: center; min-width: 0; min-height: 0; overflow: hidden; touch-action: none; }
+.dialog-viewport img { display: block; width: 100%; height: 100%; object-fit: contain; cursor: zoom-in; user-select: none; -webkit-user-drag: none; will-change: transform; }
+.dialog-viewport img.zoomed { cursor: grab; }
+.dialog-viewport img.dragging { cursor: grabbing; }
 .hidden { display: none !important; }
 @media (max-width: 1050px) {
   .shell:not(.sidebar-collapsed) { grid-template-columns: 240px minmax(0, 1fr); }
@@ -134,8 +144,7 @@ dialog button { position: absolute; right: 10px; top: 8px; }
   .sidebar.mobile-open { display: block; }
   .workspace { padding: 12px; }
   .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .card-images { height: 190px; }
+  .gallery { grid-template-columns: repeat(min(var(--grid-columns), 2), minmax(0, 1fr)); }
   .projection-layout { grid-template-columns: 1fr; }
   .point-detail { border-left: 0; border-top: 1px solid var(--line); }
 }

@@ -11,7 +11,7 @@
     <div class="brand"><span class="brand-mark">AT</span><strong>AutoTorch</strong><span>Visualization</span></div>
     <div class="top-actions">
       <div id="source-status" class="source-status">Loading sources</div>
-      <button id="filter-toggle" class="filter-toggle" type="button" aria-expanded="true">Hide filters</button>
+      <button id="filter-toggle" class="filter-toggle" type="button" aria-controls="sidebar" aria-expanded="true">Hide sidebar</button>
     </div>
   </header>
 
@@ -80,7 +80,7 @@
           <label class="field"><span>Page size</span><select id="page-size">
             <option>12</option><option>24</option><option selected>48</option><option>96</option><option>144</option>
           </select></label>
-          <label class="field"><span>Cards per row <output id="grid-value">6</output></span><input id="grid-size" type="range" min="2" max="8" value="6"></label>
+          <label class="field"><span>Maximum cards per row <output id="grid-value">6</output></span><input id="grid-size" type="range" min="2" max="8" value="6"></label>
         </section>
         <button class="primary" type="submit">Apply filters</button>
       </form>
@@ -125,7 +125,22 @@
       <div id="loading" class="loading hidden"><span></span>Loading</div>
     </section>
   </main>
-  <dialog id="image-dialog"><button id="close-dialog" aria-label="Close">Close</button><img id="dialog-image" alt="Full image preview"></dialog>
+  <dialog id="image-dialog" aria-labelledby="dialog-title">
+    <div class="dialog-shell">
+      <div class="dialog-toolbar">
+        <strong id="dialog-title">Image preview</strong>
+        <div class="dialog-actions">
+          <button id="zoom-out" class="viewer-button" type="button" aria-label="Zoom out" title="Zoom out">&minus;</button>
+          <button id="zoom-reset" class="viewer-button zoom-level" type="button" aria-label="Reset zoom" title="Reset zoom">100%</button>
+          <button id="zoom-in" class="viewer-button" type="button" aria-label="Zoom in" title="Zoom in">+</button>
+          <button id="close-dialog" class="viewer-button" type="button" aria-label="Close image viewer" title="Close">&times;</button>
+        </div>
+      </div>
+      <div id="dialog-viewport" class="dialog-viewport">
+        <img id="dialog-image" alt="Full image preview" draggable="false">
+      </div>
+    </div>
+  </dialog>
   <script type="module" src="/assets/app.js"></script>
 </body>
 </html>

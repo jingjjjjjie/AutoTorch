@@ -1,7 +1,11 @@
 import { getReview } from "./api.js";
+import { openImageViewer, withMaxSide } from "./image-viewer.js";
 import { categoricalFilters, state } from "./state.js";
 
 const byId = id => document.getElementById(id);
+const THUMBNAIL_SIZES = [256, 480, 768, 1024, 1440];
+let renderedRows = [];
+let renderedPayload = null;
 
 function requestPayload() {
   return {
@@ -37,14 +41,47 @@ function escapeText(value) {
 
 function imagePane(url, label) {
   if (!url) return `<div class="card-image"><div class="missing-image">No ${label}</div></div>`;
-  return `<button class="card-image" type="button" data-image="${escapeText(url)}"><img loading="lazy" src="${escapeText(url)}" alt="${label}"><span class="image-label">${label}</span></button>`;
+  return `<button class="card-image" type="button" data-image="${escapeText(url)}" data-label="${label}"><img loading="lazy" data-thumbnail="${escapeText(url)}" alt="${label}"><span class="image-label">${label}</span></button>`;
+}
+
+function thumbnailSize(target) {
+  return THUMBNAIL_SIZES.find(size => size >= target) || THUMBNAIL_SIZES[THUMBNAIL_SIZES.length - 1];
+}
+
+function updateGalleryLayout() {
+  const gallery = byId("gallery");
+  const preferred = Number(byId("grid-size").value);
+  const count = Number(gallery.dataset.cardCount || 0);
+  const columns = Math.max(1, Math.min(preferred, count || 1));
+  gallery.dataset.columns = String(columns);
+  gallery.style.setProperty("--grid-columns", String(columns));
+
+  const card = gallery.querySelector(".card");
+  if (!card) return;
+  const cardWidth = card.getBoundingClientRect().width;
+  const mediaHeight = state.imageMode === "both"
+    ? Math.min(360, Math.max(190, 175 + cardWidth * 0.26))
+    : Math.min(540, Math.max(215, 180 + cardWidth * 0.6));
+  gallery.style.setProperty("--card-media-height", `${Math.round(mediaHeight)}px`);
+
+  const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+  for (const image of gallery.querySelectorAll("img[data-thumbnail]")) {
+    const pane = image.closest(".card-image");
+    const target = Math.max(pane.clientWidth, pane.clientHeight) * pixelRatio;
+    const size = thumbnailSize(target);
+    if (Number(image.dataset.maxSide || 0) >= size) continue;
+    image.dataset.maxSide = String(size);
+    image.src = withMaxSide(image.dataset.thumbnail, size);
+  }
 }
 
 function renderRows(rows, payload) {
   const gallery = byId("gallery");
   gallery.replaceChildren();
+  gallery.dataset.cardCount = String(rows.length);
   if (!rows.length) {
     gallery.innerHTML = '<div class="empty-state">No rows match the current filters.</div>';
+    updateGalleryLayout();
     return;
   }
   const idColumn = payload.item_id_column;
@@ -64,6 +101,7 @@ function renderRows(rows, payload) {
     </div>`;
     gallery.append(card);
   }
+  updateGalleryLayout();
 }
 
 export async function loadReview(setBusy, showError) {
@@ -85,6 +123,8 @@ export async function loadReview(setBusy, showError) {
     byId("page-label").textContent = `Page ${result.page} of ${result.pages}`;
     byId("previous-page").disabled = result.page <= 1;
     byId("next-page").disabled = result.page >= result.pages;
+    renderedRows = result.rows;
+    renderedPayload = payload;
     renderRows(result.rows, payload);
     showError("");
   } catch (error) {
@@ -99,23 +139,26 @@ export function bindReview(setBusy, showError) {
   byId("previous-page").addEventListener("click", () => { state.page = Math.max(1, state.page - 1); loadReview(setBusy, showError); });
   byId("next-page").addEventListener("click", () => { state.page = Math.min(state.pages, state.page + 1); loadReview(setBusy, showError); });
   byId("threshold").addEventListener("input", event => { byId("threshold-value").value = Number(event.target.value).toFixed(2); });
-  byId("grid-size").addEventListener("input", event => { byId("grid-value").value = event.target.value; byId("gallery").style.setProperty("--grid-columns", event.target.value); });
+  byId("grid-size").addEventListener("input", event => {
+    byId("grid-value").value = event.target.value;
+    updateGalleryLayout();
+  });
   byId("image-mode").addEventListener("click", event => {
     const button = event.target.closest("button");
     if (!button) return;
     state.imageMode = button.dataset.value;
     for (const item of byId("image-mode").querySelectorAll("button")) item.classList.toggle("active", item === button);
-    loadReview(setBusy, showError);
+    if (renderedPayload) renderRows(renderedRows, renderedPayload);
   });
   byId("gallery").addEventListener("click", event => {
     const pane = event.target.closest("[data-image]");
     if (!pane) return;
-    byId("dialog-image").src = pane.dataset.image.replace(/([?&])max_side=\d+/, "$1max_side=0");
-    byId("image-dialog").showModal();
+    openImageViewer(pane.dataset.image, pane.dataset.label || "Image preview");
   });
   byId("gallery").addEventListener("error", event => {
     if (event.target.tagName !== "IMG") return;
     const pane = event.target.closest(".card-image");
     if (pane) pane.innerHTML = '<div class="missing-image">Image file unavailable</div>';
   }, true);
+  new ResizeObserver(updateGalleryLayout).observe(byId("review-view"));
 }

@@ -1,4 +1,5 @@
 import { getPoint, getProjection } from "./api.js";
+import { openImageViewer } from "./image-viewer.js";
 import { categoricalFilters, state } from "./state.js";
 
 const byId = id => document.getElementById(id);
@@ -151,11 +152,7 @@ export function bindProjection(setBusy, showError) {
   byId("point-detail").addEventListener("click", event => {
     const image = event.target.closest("[data-image]");
     if (!image) return;
-    const url = image.dataset.image.match(/[?&]max_side=\d+/)
-      ? image.dataset.image.replace(/([?&])max_side=\d+/, "$1max_side=0")
-      : `${image.dataset.image}${image.dataset.image.includes("?") ? "&" : "?"}max_side=0`;
-    byId("dialog-image").src = url;
-    byId("image-dialog").showModal();
+    openImageViewer(image.dataset.image, image.alt || "Selected point artifact");
   });
   const updateMethodFields = () => {
     const method = byId("projection-method").value;

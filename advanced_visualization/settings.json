@@ -82,15 +82,13 @@
       "view": "layered_gradcam",
       "score": "logit",
       "column_template": "tf_{branch}_{layer}_{score}_gradcam_path",
-      "required_columns": [
-        "tf_crop_layer_montage_path",
-        "tf_ori_layer_montage_path"
-      ],
+      "required_columns": [],
       "branches": [
         {
           "key": "crop",
           "label": "Crop",
           "image_candidates": [
+            "absolute_crop_path",
             "absolute_ocr_path",
             "ocr_path",
             "crop_path"
@@ -255,6 +253,36 @@
       "image_size": 1024,
       "image_column": "absolute_ori_path",
       "prediction_column": "Ex8point2res1024largerbs_pred_ori",
+      "enabled": true
+    },
+    {
+      "key": "ench21_vansmall_ori",
+      "prediction_csv": "/mnt5/temp_jj/ench21_vansmall_ori/prepared_predictions.csv",
+      "feature_csv": "/mnt5/temp_jj/ench21_vansmall_ori/prepared_predictions.csv",
+      "artifact_dir": "/mnt5/temp_jj/ench21_vansmall_ori",
+      "checkpoint": "",
+      "weights_epoch": null,
+      "model_type": "artifact_only",
+      "model_name": "vansmall",
+      "head_type": "tensorflow_export",
+      "image_size": 0,
+      "image_column": "absolute_ori_path",
+      "prediction_column": "tf_ori_pred",
+      "enabled": true
+    },
+    {
+      "key": "ench21_vansmall_crop",
+      "prediction_csv": "/mnt5/temp_jj/ench21_vansmall_crop/prepared_predictions.csv",
+      "feature_csv": "/mnt5/temp_jj/ench21_vansmall_crop/prepared_predictions.csv",
+      "artifact_dir": "/mnt5/temp_jj/ench21_vansmall_crop",
+      "checkpoint": "",
+      "weights_epoch": null,
+      "model_type": "artifact_only",
+      "model_name": "vansmall",
+      "head_type": "tensorflow_export",
+      "image_size": 0,
+      "image_column": "absolute_crop_path",
+      "prediction_column": "tf_crop_pred",
       "enabled": true
     }
   ]

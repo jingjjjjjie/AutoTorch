@@ -56,7 +56,7 @@ except Exception as exc:
     UMAP_IMPORT_ERROR = exc
 
 FEATURE_PREFIXES = ("feature_", "feat_", "embedding_", "emb_")
-FEATURE_PATTERN = re.compile(r"^(feature|feat|embedding|emb)[_-]?\d+$", re.IGNORECASE)
+FEATURE_PATTERN = re.compile(r"(?:^|_)(feature|feat|embedding|emb)[_-]?\d+$", re.IGNORECASE)
 PREDICTION_PATTERN = re.compile(r"(pred|prob|score)", re.IGNORECASE)
 MAX_TSNE_ROWS = 5000
 MAX_UMAP_ROWS = 50000
@@ -185,11 +185,7 @@ def load_default_csv() -> Optional[pd.DataFrame]:
 
 def infer_feature_columns(df: pd.DataFrame) -> list[str]:
     numeric_columns = df.select_dtypes(include=[np.number]).columns.tolist()
-    prefix_matches = [
-        column
-        for column in numeric_columns
-        if str(column).lower().startswith(FEATURE_PREFIXES) or FEATURE_PATTERN.match(str(column))
-    ]
+    prefix_matches = [column for column in numeric_columns if FEATURE_PATTERN.search(str(column))]
     if not prefix_matches:
         prefixes = ", ".join(FEATURE_PREFIXES)
         raise ValueError(f"No numeric feature columns found. Expected columns prefixed with one of: {prefixes}")

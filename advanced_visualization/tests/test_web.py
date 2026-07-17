@@ -243,6 +243,99 @@ def test_projection_filters_before_deterministic_sampling() -> None:
     assert [point["row_id"] for point in result["points"]] != list(range(5))
 
 
+def test_projection_limits_each_class_and_reports_counts() -> None:
+    groups = ["a"] * 6 + ["b"] * 5 + [None] * 4
+    frame = pd.DataFrame(
+        {
+            "__row_id": range(15),
+            "feature_0": np.arange(15, dtype=np.float32),
+            "feature_1": np.arange(15, dtype=np.float32) ** 2,
+            "group": groups,
+        }
+    )
+    service = ProjectionService()
+
+    cap_two = service.project(
+        frame,
+        ProjectionRequest(
+            source_id="source", feature_columns=["feature_0", "feature_1"],
+            color_column="group", max_rows=15, max_rows_per_class=2,
+        ),
+        "version",
+    )
+    cap_three = service.project(
+        frame,
+        ProjectionRequest(
+            source_id="source", feature_columns=["feature_0", "feature_1"],
+            color_column="group", max_rows=15, max_rows_per_class=3,
+        ),
+        "version",
+    )
+
+    assert cap_two["available_rows"] == 15
+    assert cap_two["rows"] == 6
+    assert cap_two["class_counts"] == [
+        {"label": "Missing", "available": 4, "displayed": 2},
+        {"label": "a", "available": 6, "displayed": 2},
+        {"label": "b", "available": 5, "displayed": 2},
+    ]
+    for label in {"Missing", "a", "b"}:
+        selected_two = {point["row_id"] for point in cap_two["points"] if point["label"] == label}
+        selected_three = {point["row_id"] for point in cap_three["points"] if point["label"] == label}
+        assert selected_two < selected_three
+
+
+def test_projection_class_limit_requires_color_column() -> None:
+    frame = pd.DataFrame(
+        {
+            "__row_id": range(4),
+            "feature_0": [0.0, 1.0, 2.0, 3.0],
+            "feature_1": [3.0, 2.0, 1.0, 0.0],
+        }
+    )
+
+    with pytest.raises(ValueError, match="valid Color by"):
+        ProjectionService().project(
+            frame,
+            ProjectionRequest(
+                source_id="source", feature_columns=["feature_0", "feature_1"],
+                max_rows=4, max_rows_per_class=2,
+            ),
+            "version",
+        )
+
+
+def test_projection_limits_complete_rows_without_underfilling_classes() -> None:
+    groups = ["a"] * 10 + ["b"] * 10
+    feature_0 = np.arange(20, dtype=np.float32)
+    feature_1 = np.arange(20, dtype=np.float32) ** 2
+    feature_0[[1, 3, 5, 7, 9, 11, 13, 15, 17, 19]] = np.nan
+    frame = pd.DataFrame(
+        {
+            "__row_id": range(20),
+            "feature_0": feature_0,
+            "feature_1": feature_1,
+            "group": groups,
+        }
+    )
+
+    result = ProjectionService().project(
+        frame,
+        ProjectionRequest(
+            source_id="source", feature_columns=["feature_0", "feature_1"],
+            color_column="group", max_rows=20, max_rows_per_class=3, random_state=2,
+        ),
+        "version",
+    )
+
+    assert result["available_rows"] == 10
+    assert result["rows"] == 6
+    assert result["class_counts"] == [
+        {"label": "a", "available": 5, "displayed": 3},
+        {"label": "b", "available": 5, "displayed": 3},
+    ]
+
+
 def test_lda_projection_supports_two_classes() -> None:
     frame = pd.DataFrame(
         {
@@ -256,12 +349,13 @@ def test_lda_projection_supports_two_classes() -> None:
         frame,
         ProjectionRequest(
             source_id="source", method="lda", feature_columns=["feature_0", "feature_1"],
-            color_column="group", max_rows=8,
+            color_column="group", max_rows=8, max_rows_per_class=2,
         ),
         "version",
     )
 
-    assert result["rows"] == 8
+    assert result["rows"] == 4
+    assert all(item["displayed"] == 2 for item in result["class_counts"])
     assert all(point["y"] == 0.0 for point in result["points"])
 
 

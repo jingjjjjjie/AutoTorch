@@ -1,6 +1,6 @@
 import { getSchema, getSources } from "./api.js";
 import { bindImageViewer } from "./image-viewer.js";
-import { bindProjection } from "./projection.js";
+import { bindProjection, clearProjection } from "./projection.js";
 import { bindReview, loadReview } from "./review.js";
 import { setOptions, state } from "./state.js";
 
@@ -161,7 +161,7 @@ async function selectSource(sourceId) {
     state.source = nextSource;
     state.schema = await getSchema(sourceId);
     state.page = 1;
-    state.projection = null;
+    clearProjection();
     populateControls(state.schema, preserveFilters);
     byId("source-status").textContent = `${state.source.label} | ${state.schema.source.rows.toLocaleString()} rows`;
     if (!byId("review-view").classList.contains("hidden")) {

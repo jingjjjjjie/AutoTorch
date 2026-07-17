@@ -93,6 +93,7 @@
           <label class="field"><span>Image</span><select id="feature-image-column"></select></label>
           <label class="field"><span>Grad-CAM</span><select id="feature-gradcam-column"></select></label>
           <label class="field"><span>Maximum rows</span><input id="max-rows" type="number" min="3" max="50000" value="5000"></label>
+          <label class="field"><span>Maximum per subclass <output id="class-limit-value">5,000</output></span><input id="class-limit" type="range" min="1" max="5000" value="5000" step="1"></label>
           <label id="perplexity-field" class="field hidden"><span>Perplexity</span><input id="perplexity" type="number" min="2" max="100" value="30"></label>
           <div id="umap-fields" class="method-fields hidden">
             <label class="field"><span>Neighbors</span><input id="umap-neighbors" type="number" min="2" max="200" value="15"></label>
@@ -101,6 +102,11 @@
           <label class="check"><input id="scale-features" type="checkbox" checked><span>Standardize features</span></label>
         </section>
         <div id="feature-count" class="note"></div>
+        <div class="sidebar-stat" aria-live="polite">
+          <span>Images displayed</span>
+          <strong id="displayed-image-count">0</strong>
+          <small id="displayed-image-total">Not projected</small>
+        </div>
         <button class="primary" type="submit">Run projection</button>
       </form>
     </aside>
@@ -117,8 +123,22 @@
       <div id="features-view" class="hidden">
         <div class="workspace-heading"><div><h1>Feature space</h1><p id="projection-summary">Select a projection and run it.</p></div><button id="plot-fullscreen" class="quiet-button" type="button">Fullscreen</button></div>
         <div class="projection-layout">
-          <div class="canvas-wrap"><canvas id="projection-canvas"></canvas><div id="plot-tooltip" class="plot-tooltip hidden"></div></div>
+          <div class="canvas-wrap">
+            <div class="plot-tools" role="toolbar" aria-label="Plot navigation">
+              <button id="plot-zoom-out" type="button" aria-label="Zoom out" title="Zoom out">&minus;</button>
+              <button id="plot-zoom-in" type="button" aria-label="Zoom in" title="Zoom in">+</button>
+              <button id="plot-reset" type="button" title="Reset plot view">Reset view</button>
+            </div>
+            <canvas id="projection-canvas" aria-label="Interactive feature projection"></canvas>
+            <div id="plot-tooltip" class="plot-tooltip hidden"></div>
+          </div>
           <aside id="point-detail" class="point-detail"><div class="empty-state">Select a point to inspect its source image.</div></aside>
+        </div>
+        <div id="legend-controls" class="legend-controls hidden">
+          <strong id="legend-title">Subclasses</strong>
+          <span id="legend-summary"></span>
+          <button id="legend-show-all" type="button">Show all</button>
+          <button id="legend-hide-all" type="button">Hide all</button>
         </div>
         <div id="legend" class="legend"></div>
       </div>

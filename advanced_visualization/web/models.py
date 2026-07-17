@@ -42,6 +42,7 @@ class ProjectionRequest(BaseModel):
     categorical_filters: dict[str, list[str]] = Field(default_factory=dict)
     scale: bool = True
     max_rows: int = Field(default=5000, ge=3, le=50000)
+    max_rows_per_class: int | None = Field(default=None, ge=1, le=50000)
     perplexity: int = Field(default=30, ge=2, le=100)
     umap_neighbors: int = Field(default=15, ge=2, le=200)
     umap_min_dist: float = Field(default=0.1, ge=0.0, le=0.99)

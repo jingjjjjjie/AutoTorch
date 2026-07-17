@@ -40,6 +40,11 @@ selected-point inspector for original images, prepared Grad-CAM, Grad-CAM++, and
 explicit montage artifacts. The filter sidebar can be collapsed on desktop and
 opens as a drawer on mobile.
 
+The feature canvas supports cursor-centered wheel zoom, drag-to-pan, reset,
+hover and click inspection, and clickable subclass visibility controls. Its
+sidebar reports the live visible-image count and can deterministically cap each
+active color subclass before applying the global projection-row limit.
+
 The image-review grid adapts its effective columns, preview height, and thumbnail
 resolution to the number and width of visible cards. Clicking any review or
 feature-inspector image opens the shared zoom viewer with wheel, button,

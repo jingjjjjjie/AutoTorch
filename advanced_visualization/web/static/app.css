@@ -64,6 +64,10 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .primary:hover { filter: brightness(1.06); }
 .primary:disabled { cursor: not-allowed; opacity: .45; filter: none; }
 .note { padding: 9px; background: #181a18; border-left: 3px solid var(--accent); color: var(--muted); font-size: 12px; }
+.sidebar-stat { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 2px 8px; padding: 9px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.sidebar-stat span { color: var(--muted); font-size: 11px; text-transform: uppercase; }
+.sidebar-stat strong { font-size: 20px; }
+.sidebar-stat small { grid-column: 1 / -1; color: var(--muted); }
 .workspace { position: relative; min-width: 0; padding: 20px; }
 .workspace-heading { display: flex; align-items: end; justify-content: space-between; margin: 22px 0 12px; }
 .workspace-heading p { color: var(--muted); margin-bottom: 0; }
@@ -97,8 +101,14 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .projection-layout.fullscreen { position: fixed; inset: 12px; z-index: 50; min-height: 0; box-shadow: 0 0 0 12px rgba(0,0,0,.86); }
 .projection-layout.fullscreen #projection-canvas { height: calc(100vh - 24px); }
 body:has(.projection-layout.fullscreen) #plot-fullscreen { position: fixed; top: 20px; right: 280px; z-index: 51; background: #111311; }
-.canvas-wrap { position: relative; min-width: 0; }
-#projection-canvas { display: block; width: 100%; height: 640px; }
+.canvas-wrap { position: relative; min-width: 0; touch-action: none; }
+#projection-canvas { display: block; width: 100%; height: 640px; cursor: grab; touch-action: none; }
+#projection-canvas.panning { cursor: grabbing; }
+.plot-tools { position: absolute; top: 8px; left: 8px; z-index: 2; display: flex; gap: 4px; }
+.plot-tools button { min-width: 30px; height: 30px; padding: 0 8px; color: var(--text); background: rgba(32,35,33,.92); border: 1px solid var(--line); border-radius: 4px; font-size: 12px; }
+.plot-tools button:first-child, .plot-tools button:nth-child(2) { width: 30px; padding: 0; font-size: 17px; }
+.plot-tools button:hover { background: #343834; }
+.plot-tools button:disabled { cursor: default; opacity: .4; }
 .point-detail { padding: 12px; border-left: 1px solid var(--line); background: var(--panel); }
 .point-detail img { width: 100%; max-height: 430px; object-fit: contain; background: #101110; }
 .point-detail h3 { font-size: 14px; overflow-wrap: anywhere; }
@@ -111,8 +121,18 @@ body:has(.projection-layout.fullscreen) #plot-fullscreen { position: fixed; top:
 .inspector-image { cursor: zoom-in; }
 .empty-state { grid-column: 1 / -1; color: var(--muted); padding: 24px 8px; text-align: center; }
 .plot-tooltip { position: absolute; pointer-events: none; padding: 5px 7px; background: #0e100e; border: 1px solid var(--line); font-size: 11px; border-radius: 3px; }
-.legend { display: flex; flex-wrap: wrap; gap: 10px; padding: 10px 0; color: var(--muted); font-size: 11px; }
-.legend-item { display: flex; align-items: center; gap: 5px; }
+.legend-controls { display: flex; align-items: center; gap: 6px; padding: 10px 0 4px; color: var(--muted); font-size: 11px; }
+.legend-controls strong { color: var(--text); font-size: 12px; overflow-wrap: anywhere; }
+.legend-controls span { margin-right: auto; }
+.legend-controls button { min-height: 28px; padding: 0 8px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 4px; font-size: 11px; }
+.legend-controls button:hover { color: var(--text); background: var(--panel-2); }
+.legend-controls button:disabled { cursor: default; opacity: .4; }
+.legend { display: flex; flex-wrap: wrap; gap: 5px; max-height: 160px; padding: 6px 0 10px; overflow-y: auto; color: var(--muted); font-size: 11px; }
+.legend-item { display: flex; align-items: center; gap: 5px; min-height: 28px; max-width: 260px; padding: 3px 7px; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; }
+.legend-item:hover { color: var(--text); background: var(--panel-2); }
+.legend-item.is-hidden { opacity: .42; }
+.legend-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.legend-count { color: var(--muted); font-variant-numeric: tabular-nums; }
 .legend-swatch { width: 9px; height: 9px; border-radius: 50%; }
 dialog { width: min(98vw, 1800px); height: 96vh; max-width: none; max-height: none; padding: 0; overflow: hidden; background: #0c0d0c; border: 1px solid var(--line); }
 dialog::backdrop { background: rgba(0,0,0,.78); }
@@ -146,5 +166,11 @@ dialog::backdrop { background: rgba(0,0,0,.78); }
   .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .gallery { grid-template-columns: repeat(min(var(--grid-columns), 2), minmax(0, 1fr)); }
   .projection-layout { grid-template-columns: 1fr; }
+  .projection-layout.fullscreen { grid-template-columns: minmax(0, 1fr); }
+  .projection-layout.fullscreen #projection-canvas { height: calc(100dvh - 24px); }
+  .projection-layout.fullscreen .point-detail { display: none; }
+  body:has(.projection-layout.fullscreen) #plot-fullscreen { right: 20px; }
   .point-detail { border-left: 0; border-top: 1px solid var(--line); }
+  .legend-controls { flex-wrap: wrap; }
+  .legend-controls span { flex: 1 1 auto; margin-right: 0; }
 }

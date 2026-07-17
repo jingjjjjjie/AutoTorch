@@ -30,14 +30,14 @@ function clamp(value, minimum, maximum) {
 function constrainPan() {
   const image = byId("dialog-image");
   const viewport = byId("dialog-viewport");
-  const viewportRatio = viewport.clientWidth / Math.max(1, viewport.clientHeight);
+  const imageBoxRatio = image.clientWidth / Math.max(1, image.clientHeight);
   const imageRatio = image.naturalWidth / Math.max(1, image.naturalHeight);
-  const fittedWidth = imageRatio >= viewportRatio
-    ? viewport.clientWidth
-    : viewport.clientHeight * imageRatio;
-  const fittedHeight = imageRatio >= viewportRatio
-    ? viewport.clientWidth / Math.max(imageRatio, 0.001)
-    : viewport.clientHeight;
+  const fittedWidth = imageRatio >= imageBoxRatio
+    ? image.clientWidth
+    : image.clientHeight * imageRatio;
+  const fittedHeight = imageRatio >= imageBoxRatio
+    ? image.clientWidth / Math.max(imageRatio, 0.001)
+    : image.clientHeight;
   const maxX = Math.max(0, (fittedWidth * scale - viewport.clientWidth) / 2);
   const maxY = Math.max(0, (fittedHeight * scale - viewport.clientHeight) / 2);
   offsetX = clamp(offsetX, -maxX, maxX);

@@ -51,7 +51,7 @@ async function showPoint(point, showError) {
     if (requestId !== pointRequest || state.source.id !== sourceId) return;
     detail.replaceChildren();
     const title = document.createElement("h3");
-    title.textContent = point.label;
+    title.textContent = point.item_id || `Row ${point.row_id}`;
     const coordinates = document.createElement("p");
     coordinates.className = "point-coordinates";
     coordinates.textContent = `Row ${point.row_id} | x ${point.x.toFixed(3)} | y ${point.y.toFixed(3)}`;
@@ -107,6 +107,7 @@ function projectionPayload(sourceId) {
     source_id: sourceId,
     method: byId("projection-method").value,
     feature_columns: state.schema.feature_columns,
+    item_id_column: byId("item-column").value,
     color_column: byId("color-column").value,
     categorical_filters: categoricalFilters(),
     scale: byId("scale-features").checked,

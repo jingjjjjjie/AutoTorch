@@ -161,6 +161,7 @@ def test_projection_returns_finite_points() -> None:
     frame = pd.DataFrame(
         {
             "__row_id": range(5),
+            "uuid": [f"uuid-{index}" for index in range(5)],
             "feature_0": [0.0, 1.0, 2.0, 3.0, 4.0],
             "feature_1": [2.0, 1.0, 0.0, 1.0, 2.0],
             "group": ["a", "a", "b", "b", "b"],
@@ -169,6 +170,7 @@ def test_projection_returns_finite_points() -> None:
     request = ProjectionRequest(
         source_id="source",
         feature_columns=["feature_0", "feature_1"],
+        item_id_column="uuid",
         color_column="group",
         max_rows=5,
     )
@@ -178,6 +180,9 @@ def test_projection_returns_finite_points() -> None:
 
     assert result["rows"] == 5
     assert {point["label"] for point in result["points"]} == {"a", "b"}
+    assert {point["item_id"] for point in result["points"]} == {
+        "uuid-0", "uuid-1", "uuid-2", "uuid-3", "uuid-4",
+    }
     assert all(np.isfinite(point["x"]) and np.isfinite(point["y"]) for point in result["points"])
     assert service.project(frame, request, "version") is result
 

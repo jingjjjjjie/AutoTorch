@@ -221,7 +221,7 @@ python advanced_visualization/cli/pregenerate_gradcam.py \
 
 ## Docker
 
-Build and run:
+Build and run the recommended FastAPI web viewer:
 
 ```bash
 docker compose -f advanced_visualization/docker-compose.yml up --build advanced-visualization
@@ -230,10 +230,11 @@ docker compose -f advanced_visualization/docker-compose.yml up --build advanced-
 Open:
 
 ```text
-http://localhost:8501
+http://localhost:8000
 ```
 
-The compose file mounts the repo at `/app`. If your configured artifact paths
+Compose builds `Dockerfile.web` and mounts the repo at `/app`, so the container
+runs the current web implementation. If your configured artifact paths
 live outside the repo, add the required bind mount in
 `advanced_visualization/docker-compose.yml`.
 

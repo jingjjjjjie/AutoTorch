@@ -25,6 +25,7 @@ class UserModelConfig:
     image_size: int = 0
     image_column: str = ""
     prediction_column: str = ""
+    review_preset: dict[str, Any] = field(default_factory=dict)
     enabled: bool = True
 
     @classmethod
@@ -43,6 +44,7 @@ class UserModelConfig:
             image_size=int(payload.get("image_size") or 0),
             image_column=str(payload.get("image_column", "")),
             prediction_column=str(payload.get("prediction_column", "")),
+            review_preset=dict(payload.get("review_preset", {})),
             enabled=bool(payload.get("enabled", True)),
         )
 
@@ -60,6 +62,7 @@ class UserModelConfig:
             "image_size": self.image_size,
             "image_column": self.image_column,
             "prediction_column": self.prediction_column,
+            "review_preset": self.review_preset,
             "enabled": self.enabled,
         }
 

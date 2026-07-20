@@ -243,7 +243,7 @@ export function createScatterPlot({ onPointSelect, onVisibleCount }) {
     const { point, x, y } = nearestPoint(clientX, clientY);
     tooltip.classList.toggle("hidden", !point);
     if (!point) return;
-    tooltip.textContent = `${point.label} | row ${point.row_id}`;
+    tooltip.textContent = `${point.item_id || `Row ${point.row_id}`} | ${point.label}`;
     const bounds = canvas.getBoundingClientRect();
     tooltip.style.left = `${Math.max(4, Math.min(x + 10, bounds.width - tooltip.offsetWidth - 4))}px`;
     tooltip.style.top = `${Math.max(4, Math.min(y + 10, bounds.height - tooltip.offsetHeight - 4))}px`;

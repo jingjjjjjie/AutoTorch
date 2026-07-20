@@ -30,6 +30,12 @@ def _labels(frame: pd.DataFrame, column: str) -> pd.Series:
     return frame[column].fillna("Missing").astype(str)
 
 
+def _item_ids(frame: pd.DataFrame, column: str) -> pd.Series:
+    if not column or column not in frame.columns:
+        return pd.Series("", index=frame.index, dtype="object")
+    return frame[column].fillna("").astype(str)
+
+
 def _stable_sample(frame: pd.DataFrame, rows: int, random_state: int) -> pd.DataFrame:
     if len(frame) <= rows:
         return frame
@@ -166,16 +172,22 @@ class ProjectionService:
                 coords = np.column_stack([coords[:, 0], np.zeros(len(coords), dtype=np.float32)])
 
         displayed_labels = _labels(working, request.color_column)
+        displayed_item_ids = _item_ids(working, request.item_id_column)
         displayed_counts = displayed_labels.value_counts().to_dict()
         points = []
-        for position, (row_id, label) in enumerate(
-            zip(working["__row_id"].tolist(), displayed_labels.tolist())
+        for position, (row_id, label, item_id) in enumerate(
+            zip(
+                working["__row_id"].tolist(),
+                displayed_labels.tolist(),
+                displayed_item_ids.tolist(),
+            )
         ):
             points.append({
                 "x": float(coords[position, 0]),
                 "y": float(coords[position, 1]),
                 "row_id": int(row_id),
                 "label": label,
+                "item_id": item_id,
             })
         class_counts = [
             {

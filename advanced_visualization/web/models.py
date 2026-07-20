@@ -41,6 +41,7 @@ class ProjectionRequest(BaseModel):
     source_id: str
     method: Literal["pca", "tsne", "umap", "lda"] = "pca"
     feature_columns: list[str] = Field(default_factory=list)
+    item_id_column: str = ""
     color_column: str = ""
     categorical_filters: dict[str, list[str]] = Field(default_factory=dict)
     scale: bool = True
@@ -76,6 +77,7 @@ class SchemaResponse(BaseModel):
     image_availability: dict[str, float]
     default_filter_columns: list[str]
     prepared_gradcam_methods: list[str]
+    review_preset: dict[str, Any] = Field(default_factory=dict)
 
 
 JsonValue = str | int | float | bool | None

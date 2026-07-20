@@ -83,6 +83,9 @@ class DatasetRepository:
                 )
             )
             seen.add(path.resolve())
+        default_model_key = str(load_settings().review.get("default_model_key", ""))
+        if default_model_key:
+            result.sort(key=lambda source: source.model_key != default_model_key)
         return result
 
     def source(self, source_id: str) -> DataSource:
@@ -206,6 +209,7 @@ class DatasetRepository:
                 if column in categories
             ],
             "prepared_gradcam_methods": prepared_methods,
+            "review_preset": dict(model.review_preset) if model else {},
         }
         with self._lock:
             self._schema_cache[source_id] = (*signature, details)

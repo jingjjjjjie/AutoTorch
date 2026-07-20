@@ -42,6 +42,7 @@
     0.225
   ],
   "review": {
+    "default_model_key": "Ex8point2res1024largerbs_square_exp",
     "positive_truth_value": 1,
     "negative_truth_value": 0,
     "invalid_truth_value": -1,
@@ -253,6 +254,49 @@
       "image_size": 1024,
       "image_column": "absolute_ori_path",
       "prediction_column": "Ex8point2res1024largerbs_pred_ori",
+      "enabled": true
+    },
+    {
+      "key": "Ex8point2res1024largerbs_square_exp",
+      "prediction_csv": "/home/jingjie/AutoTorch/src/eval/idfraud/annotation/joined_predictions.csv",
+      "feature_csv": "/mnt5/temp_jj/square_exp2_Ex8point2res1024_largerbs_21plusaugfeb_UniRepLKNet_T_legacy_v1_1024_ori/prepared_predictions.csv",
+      "artifact_dir": "/mnt5/temp_jj/square_exp2_Ex8point2res1024_largerbs_21plusaugfeb_UniRepLKNet_T_legacy_v1_1024_ori",
+      "checkpoint": "/mnt5/temp_jj/square_exp2_Ex8point2res1024_largerbs_21plusaugfeb_UniRepLKNet_T_legacy_v1_1024_ori/checkpoints/epoch_8.pt",
+      "weights_epoch": 8,
+      "model_type": "unireplknet",
+      "model_name": "unireplknet_t",
+      "head_type": "legacy_v1",
+      "image_size": 1024,
+      "image_column": "absolute_ori_path",
+      "prediction_column": "Ex8point2res1024largerbs_square_exp_pred_ori",
+      "review_preset": {
+        "image_column": "absolute_ori_path",
+        "prediction_column": "Ex8point2res1024largerbs_square_exp_pred_ori",
+        "truth_column": "label",
+        "subclass_column": "Recapture_Subclass",
+        "threshold": 0.01,
+        "truth_rows": "valid",
+        "failure_mode": "failures",
+        "image_mode": "original",
+        "categorical_filters": {
+          "Quality_Issue": {
+            "include": [
+              "0.0"
+            ]
+          },
+          "Recapture_Subclass": {
+            "exclude": [
+              "Unknown"
+            ]
+          },
+          "Data_Identity": {
+            "exclude": [
+              "Aug_2025_myID_datacollection",
+              "Feb_2026_mixed_RoutineAnnotation"
+            ]
+          }
+        }
+      },
       "enabled": true
     },
     {

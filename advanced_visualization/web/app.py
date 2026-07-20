@@ -85,6 +85,7 @@ def schema(source_id: str) -> SchemaResponse:
         image_availability=details["image_availability"],
         default_filter_columns=details["default_filter_columns"],
         prepared_gradcam_methods=details["prepared_gradcam_methods"],
+        review_preset=details["review_preset"],
     )
 
 

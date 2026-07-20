@@ -27,6 +27,47 @@ function initializeCategoricalFilters(schema, preserve = false) {
   renderCategoricalFilters();
 }
 
+function applyReviewPreset(schema) {
+  const preset = schema.review_preset || {};
+  if (!Object.keys(preset).length) return;
+
+  const selectValue = (id, value) => {
+    const element = byId(id);
+    if (value != null && [...element.options].some(option => option.value === value)) {
+      element.value = value;
+    }
+  };
+  selectValue("image-column", preset.image_column);
+  selectValue("prediction-column", preset.prediction_column);
+  selectValue("truth-column", preset.truth_column);
+  selectValue("subclass-column", preset.subclass_column);
+  selectValue("truth-rows", preset.truth_rows);
+  selectValue("failure-mode", preset.failure_mode);
+
+  if (preset.threshold != null) {
+    byId("threshold").value = String(preset.threshold);
+    byId("threshold-value").value = Number(preset.threshold).toFixed(2);
+  }
+  if (preset.image_mode) {
+    state.imageMode = preset.image_mode;
+    for (const button of byId("image-mode").querySelectorAll("button")) {
+      button.classList.toggle("active", button.dataset.value === preset.image_mode);
+    }
+  }
+
+  for (const [column, rule] of Object.entries(preset.categorical_filters || {})) {
+    const available = schema.categories[column];
+    if (!available) continue;
+    if (!state.activeFilterColumns.includes(column)) state.activeFilterColumns.push(column);
+    const excluded = new Set((rule.exclude || []).map(String));
+    const included = rule.include ? new Set(rule.include.map(String)) : null;
+    state.filterSelections.set(column, new Set(available.filter(value =>
+      !excluded.has(String(value)) && (!included || included.has(String(value)))
+    )));
+  }
+  renderCategoricalFilters();
+}
+
 function updateFilterCount() {
   let count = 0;
   for (const column of state.activeFilterColumns) {
@@ -151,6 +192,7 @@ function populateControls(schema, preserveFilters = false) {
     : "No numeric feature columns were detected.";
   byId("feature-controls").querySelector("button.primary").disabled = !schema.feature_columns.length;
   initializeCategoricalFilters(schema, preserveFilters);
+  applyReviewPreset(schema);
 }
 
 async function selectSource(sourceId) {

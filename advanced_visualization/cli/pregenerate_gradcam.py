@@ -130,9 +130,10 @@ def output_path_for_image(config_key: str, image_path: Path, args: argparse.Name
 
 
 class GradcamDataset(Dataset):
-    def __init__(self, jobs: list[tuple[int, Path, dict[str, Path]]], transform):
+    def __init__(self, jobs: list[tuple[int, Path, dict[str, Path]]], transform, max_output_side: int | None = None):
         self.jobs = jobs
         self.transform = transform
+        self.max_output_side = max_output_side
 
     def __len__(self) -> int:
         return len(self.jobs)
@@ -144,6 +145,8 @@ class GradcamDataset(Dataset):
         except Exception:
             return None
         tensor = self.transform(image)
+        if self.max_output_side and max(image.size) > self.max_output_side:
+            image.thumbnail((self.max_output_side, self.max_output_side), Image.Resampling.LANCZOS)
         base = np.asarray(image, dtype=np.uint8)
         return tensor, base, {method: str(path) for method, path in output_paths.items()}, row_index
 
@@ -201,7 +204,10 @@ def process_batch(config_key: str, bundle, batch, activations, gradients, save_p
             h, w = base.shape[:2]
             resized = F.interpolate(cam.unsqueeze(0), size=(h, w), mode="bilinear", align_corners=False).squeeze()
             resized = (resized - resized.min()) / (resized.max() - resized.min() + 1e-8)
-            cam_np = resized.detach().to("cpu", non_blocking=True).numpy()
+            # Saving runs on background threads, so the array must own a fully
+            # completed CPU copy. A non-blocking D2H copy can otherwise race
+            # with PNG encoding and produce partially transferred stripe bands.
+            cam_np = resized.detach().float().cpu().numpy().copy()
             futures.append(save_pool.submit(_save_overlay, base, cam_np, output_path))
     return futures
 
@@ -305,7 +311,11 @@ def pregenerate_csv(csv_path: Path, args: argparse.Namespace) -> tuple[int, int,
     forward_handle = target_layer.register_forward_hook(forward_hook)
     backward_handle = target_layer.register_full_backward_hook(backward_hook)
 
-    dataset = GradcamDataset(jobs, bundle["transform"])
+    dataset = GradcamDataset(
+        jobs,
+        bundle["transform"],
+        max_output_side=getattr(args, "max_output_side", None),
+    )
     loader = DataLoader(
         dataset,
         batch_size=args.batch_size,
@@ -397,6 +407,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-workers", type=int, default=min(8, os.cpu_count() or 1), help="DataLoader worker processes for image I/O and transforms.")
     parser.add_argument("--prefetch-factor", type=int, default=4, help="DataLoader prefetch factor (per worker).")
     parser.add_argument("--save-workers", type=int, default=8, help="Threads used to compose and save overlay PNGs.")
+    parser.add_argument(
+        "--max-output-side",
+        type=int,
+        default=None,
+        help="Optionally downscale only the saved overlay's longest side; model input preprocessing is unchanged.",
+    )
     parser.add_argument(
         "--cam-method",
         action="append",

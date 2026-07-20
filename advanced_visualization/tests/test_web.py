@@ -7,6 +7,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from advanced_visualization.core.gradcam_cache import gradcam_cache_candidates, gradcam_file_index
+from advanced_visualization.core.heatmap import jet_overlay
 from advanced_visualization.web.filtering import filter_frame, page_frame
 from advanced_visualization.web.images import image_bytes
 from advanced_visualization.web.models import FilterRequest, ProjectionRequest
@@ -38,6 +40,35 @@ def test_filtering_classifies_failures_and_pages() -> None:
     assert page["__row_id"].tolist() == [0, 2]
     assert page["__failure_type"].tolist() == ["false positive", "false negative"]
     assert metadata["metrics"]["failure_rate"] == 1.0
+
+
+def test_filter_request_accepts_genuine_cam_target() -> None:
+    request = FilterRequest(source_id="test", gradcam_target="genuine")
+
+    assert request.gradcam_target == "genuine"
+
+
+def test_gradcam_cache_separates_fraud_and_genuine_targets(tmp_path: Path) -> None:
+    image_path = tmp_path / "source.jpg"
+    image_path.write_bytes(b"image")
+    fraud = gradcam_cache_candidates(tmp_path, image_path, method="gradcam", target="fraud")[0]
+    genuine = gradcam_cache_candidates(tmp_path, image_path, method="gradcam", target="genuine")[0]
+    fraud.write_bytes(b"fraud")
+    genuine.write_bytes(b"genuine")
+
+    assert fraud.name.endswith("_gradcam_logit.png")
+    assert genuine.name.endswith("_gradcam_genuine_logit.png")
+    digest = fraud.name.split("_", 1)[0]
+    assert gradcam_file_index(str(tmp_path), method="gradcam", target="fraud") == {digest: str(fraud)}
+    assert gradcam_file_index(str(tmp_path), method="gradcam", target="genuine") == {digest: str(genuine)}
+
+
+def test_jet_overlay_maps_low_to_blue_and_high_to_red() -> None:
+    base = np.zeros((1, 2, 3), dtype=np.uint8)
+    overlay = np.asarray(jet_overlay(base, np.array([[0.0, 1.0]], dtype=np.float32)))
+
+    assert overlay[0, 0, 2] > overlay[0, 0, 0]
+    assert overlay[0, 1, 0] > overlay[0, 1, 2]
 
 
 @pytest.mark.parametrize(

@@ -8,15 +8,39 @@ from advanced_visualization.core.config import DEFAULT_GRADCAM_ROOT, gradcam_art
 from advanced_visualization.core.images import image_cache_digest, valid_image
 
 
-def gradcam_cache_candidates(root: Path, image_path: Path, method: str = "", space: str = "original") -> list[Path]:
+def gradcam_cache_candidates(
+    root: Path,
+    image_path: Path,
+    method: str = "",
+    space: str = "original",
+    target: str = "fraud",
+) -> list[Path]:
     digest = image_cache_digest(image_path)
     if not digest:
         return []
     space_marker = "_model_input" if space == "model-input" else ""
+    target_marker = "_genuine" if target == "genuine" else ""
     if method == "gradcam":
-        return [root / f"{digest}_gradcam_logit{space_marker}.png", root / f"{digest}_gradcam{space_marker}.png"]
+        return [
+            root / f"{digest}_gradcam{target_marker}_logit{space_marker}.png",
+            root / f"{digest}_gradcam{target_marker}{space_marker}.png",
+        ]
     if method in {"gradcam++", "gradcampp"}:
-        return [root / f"{digest}_gradcampp_logit{space_marker}.png", root / f"{digest}_gradcampp{space_marker}.png"]
+        return [
+            root / f"{digest}_gradcampp{target_marker}_logit{space_marker}.png",
+            root / f"{digest}_gradcampp{target_marker}{space_marker}.png",
+        ]
+    if target == "genuine":
+        return [
+            root / f"{digest}_gradcam_genuine_logit.png",
+            root / f"{digest}_gradcam_genuine_logit_model_input.png",
+            root / f"{digest}_gradcampp_genuine_logit.png",
+            root / f"{digest}_gradcampp_genuine_logit_model_input.png",
+            root / f"{digest}_gradcam_genuine.png",
+            root / f"{digest}_gradcam_genuine_model_input.png",
+            root / f"{digest}_gradcampp_genuine.png",
+            root / f"{digest}_gradcampp_genuine_model_input.png",
+        ]
     return [
         root / f"{digest}_gradcam_logit.png",
         root / f"{digest}_gradcam_logit_model_input.png",
@@ -61,6 +85,27 @@ GRADCAM_METHOD_PRIORITY = {
     ),
 }
 
+GENUINE_GRADCAM_METHOD_PRIORITY = {
+    "gradcam": (
+        "_gradcam_genuine_logit.png",
+        "_gradcam_genuine_logit_model_input.png",
+        "_gradcam_genuine.png",
+        "_gradcam_genuine_model_input.png",
+    ),
+    "gradcam++": (
+        "_gradcampp_genuine_logit.png",
+        "_gradcampp_genuine_logit_model_input.png",
+        "_gradcampp_genuine.png",
+        "_gradcampp_genuine_model_input.png",
+    ),
+    "gradcampp": (
+        "_gradcampp_genuine_logit.png",
+        "_gradcampp_genuine_logit_model_input.png",
+        "_gradcampp_genuine.png",
+        "_gradcampp_genuine_model_input.png",
+    ),
+}
+
 
 def priority_index(name: str, priority: tuple[str, ...]) -> int:
     for index, marker in enumerate(priority):
@@ -69,13 +114,21 @@ def priority_index(name: str, priority: tuple[str, ...]) -> int:
     return len(priority)
 
 
-def gradcam_file_index(root: str, method: str = "") -> dict[str, str]:
+def gradcam_file_index(root: str, method: str = "", target: str = "fraud") -> dict[str, str]:
     root_path = Path(root).expanduser()
     if not root_path.exists():
         return {}
-    priority = GRADCAM_METHOD_PRIORITY.get(method, GRADCAM_PRIORITY)
+    if target == "genuine":
+        priority = GENUINE_GRADCAM_METHOD_PRIORITY.get(
+            method, tuple(marker for markers in GENUINE_GRADCAM_METHOD_PRIORITY.values() for marker in markers)
+        )
+    else:
+        priority = GRADCAM_METHOD_PRIORITY.get(method, GRADCAM_PRIORITY)
     index = {}
     for path in root_path.glob("*.png"):
+        is_genuine = "_genuine" in path.name.lower()
+        if is_genuine != (target == "genuine"):
+            continue
         digest = path.name.split("_", 1)[0]
         if len(digest) != 18:
             continue
@@ -133,7 +186,9 @@ def resolve_gradcam_path(row, controls: dict):
     space = controls.get("cam_space", "original")
 
     for root in roots:
-        for candidate in gradcam_cache_candidates(root, image_path, method=method, space=space):
+        for candidate in gradcam_cache_candidates(
+            root, image_path, method=method, space=space, target=controls.get("cam_target", "fraud")
+        ):
             if candidate.is_file():
                 return candidate
 

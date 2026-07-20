@@ -13,6 +13,7 @@ from PIL import Image
 
 from advanced_visualization.core.config import DEFAULT_GRADCAM_ROOT, DEFAULT_MEAN, DEFAULT_STD, SRC_ROOT, ModelRunConfig
 from advanced_visualization.core.gradcam_cache import gradcam_cache_candidates
+from advanced_visualization.core.heatmap import jet_overlay
 
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
@@ -91,13 +92,15 @@ class UniRepLKNetGradcamEngine:
         weights = gradient.mean(dim=(2, 3), keepdim=True)
         return torch.relu((weights * activation).sum(dim=1, keepdim=True))
 
-    def generate(self, config: ModelRunConfig, image_path: Path) -> Path:
+    def generate(self, config: ModelRunConfig, image_path: Path, target: str = "fraud") -> Path:
         if not image_path.is_file():
             raise FileNotFoundError(f"Image missing: {image_path}")
 
         output_root = self._artifact_root(config)
         output_root.mkdir(parents=True, exist_ok=True)
-        output_path = gradcam_cache_candidates(output_root, image_path)[0]
+        if target not in {"fraud", "genuine"}:
+            raise ValueError(f"Unsupported CAM target: {target}")
+        output_path = gradcam_cache_candidates(output_root, image_path, target=target)[0]
         if output_path.exists():
             return output_path
 
@@ -122,6 +125,8 @@ class UniRepLKNetGradcamEngine:
             input_tensor = transform(image).unsqueeze(0).to(device)
             model.zero_grad(set_to_none=True)
             score = self.score(model, input_tensor).mean()
+            if target == "genuine":
+                score = -score
             score.backward()
 
             activation = activations["value"].detach()
@@ -131,7 +136,9 @@ class UniRepLKNetGradcamEngine:
             cam = cam.squeeze().float()
             cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
             tmp_output = output_path.with_name(f".{output_path.name}.{os.getpid()}.tmp")
-            self._overlay(image, cam.detach().cpu().numpy()).save(tmp_output, format="PNG", compress_level=3)
+            jet_overlay(np.asarray(image.convert("RGB")), cam.detach().cpu().numpy()).save(
+                tmp_output, format="PNG", compress_level=3
+            )
             os.replace(tmp_output, output_path)
             return output_path
         finally:
@@ -161,15 +168,3 @@ class UniRepLKNetGradcamEngine:
                 key = key[len("module.") :]
             normalized[key] = value
         model.load_state_dict(normalized, strict=True)
-
-    def _overlay(self, original: Image.Image, cam: np.ndarray) -> Image.Image:
-        cam = np.nan_to_num(cam, nan=0.0, posinf=1.0, neginf=0.0)
-        cam = np.clip(cam, 0.0, 1.0)
-        base = np.asarray(original.convert("RGB"), dtype=np.float32)
-        heat = np.zeros_like(base)
-        heat[..., 0] = 255.0 * cam
-        heat[..., 1] = 210.0 * np.sqrt(cam)
-        heat[..., 2] = 28.0 * (1.0 - cam) * cam
-        alpha = np.clip(0.18 + 0.55 * cam[..., None], 0.18, 0.65)
-        overlay = base * (1.0 - alpha) + heat * alpha
-        return Image.fromarray(np.clip(overlay, 0, 255).astype(np.uint8))

@@ -30,6 +30,7 @@ from advanced_visualization.models.gradcam import (
     load_gradcam_bundle,
 )
 from advanced_visualization.core.images import valid_image
+from advanced_visualization.core.heatmap import jet_overlay
 from advanced_visualization.core.settings import configured_path, load_settings
 
 
@@ -105,10 +106,12 @@ def apply_filters(df: pd.DataFrame, args: argparse.Namespace) -> pd.DataFrame:
     return filtered
 
 
-def existing_gradcam_for_image(config_key: str, image_path: Path, method: str = "") -> Path | None:
+def existing_gradcam_for_image(
+    config_key: str, image_path: Path, method: str = "", target: str = "fraud"
+) -> Path | None:
     roots = gradcam_roots(config_key, "")
     for root in roots:
-        for candidate in gradcam_cache_candidates(root, image_path, method=method):
+        for candidate in gradcam_cache_candidates(root, image_path, method=method, target=target):
             if candidate.is_file():
                 return candidate
     return None
@@ -123,14 +126,20 @@ def output_root_for_config(config_key: str, args: argparse.Namespace) -> Path:
     return output_root
 
 
-def output_path_for_image(config_key: str, image_path: Path, args: argparse.Namespace, method: str = "gradcam") -> Path:
+def output_path_for_image(
+    config_key: str,
+    image_path: Path,
+    args: argparse.Namespace,
+    method: str = "gradcam",
+    target: str = "fraud",
+) -> Path:
     output_root = output_root_for_config(config_key, args)
     output_root.mkdir(parents=True, exist_ok=True)
-    return gradcam_cache_candidates(output_root, image_path, method=method)[0]
+    return gradcam_cache_candidates(output_root, image_path, method=method, target=target)[0]
 
 
 class GradcamDataset(Dataset):
-    def __init__(self, jobs: list[tuple[int, Path, dict[str, Path]]], transform, max_output_side: int | None = None):
+    def __init__(self, jobs: list[tuple[int, Path, dict[tuple[str, str], Path]]], transform, max_output_side: int | None = None):
         self.jobs = jobs
         self.transform = transform
         self.max_output_side = max_output_side
@@ -148,7 +157,7 @@ class GradcamDataset(Dataset):
         if self.max_output_side and max(image.size) > self.max_output_side:
             image.thumbnail((self.max_output_side, self.max_output_side), Image.Resampling.LANCZOS)
         base = np.asarray(image, dtype=np.uint8)
-        return tensor, base, {method: str(path) for method, path in output_paths.items()}, row_index
+        return tensor, base, {key: str(path) for key, path in output_paths.items()}, row_index
 
 
 def collate_valid(batch):
@@ -163,19 +172,19 @@ def collate_valid(batch):
 
 
 def overlay_from_cam(base: np.ndarray, cam: np.ndarray) -> Image.Image:
-    cam = np.nan_to_num(cam, nan=0.0, posinf=1.0, neginf=0.0)
-    cam = np.clip(cam, 0.0, 1.0)
-    base_f = base.astype(np.float32)
-    heat = np.empty_like(base_f)
-    heat[..., 0] = 255.0 * cam
-    heat[..., 1] = 210.0 * np.sqrt(cam)
-    heat[..., 2] = 28.0 * (1.0 - cam) * cam
-    alpha = np.clip(0.18 + 0.55 * cam[..., None], 0.18, 0.65)
-    overlay = base_f * (1.0 - alpha) + heat * alpha
-    return Image.fromarray(np.clip(overlay, 0, 255).astype(np.uint8))
+    return jet_overlay(base, cam)
 
 
-def process_batch(config_key: str, bundle, batch, activations, gradients, save_pool: ThreadPoolExecutor, cam_methods: list[str]):
+def process_batch(
+    config_key: str,
+    bundle,
+    batch,
+    activations,
+    gradients,
+    save_pool: ThreadPoolExecutor,
+    cam_methods: list[str],
+    cam_targets: list[str],
+):
     tensors, bases, outputs, row_indices = batch
     model = bundle["model"]
     device = bundle["device"]
@@ -185,30 +194,33 @@ def process_batch(config_key: str, bundle, batch, activations, gradients, save_p
     input_tensor = tensors.to(device, non_blocking=True)
     model.zero_grad(set_to_none=True)
     score = gradcam_score(model, input_tensor, config_key=config_key).sum()
-    score.backward()
 
     if "value" not in activations:
         raise RuntimeError(f"Grad-CAM target layer did not produce activations for rows {row_indices[:5]}")
-    if "value" not in gradients:
-        raise RuntimeError(f"Grad-CAM target layer did not produce gradients for rows {row_indices[:5]}")
-
     activation = activations["value"].detach()
-    gradient = gradients["value"].detach()
     futures = []
-    for method in cam_methods:
-        cam_batch = compute_cam(activation, gradient, config_key=config_key, method=method).float()
-        for cam, base, output_paths in zip(cam_batch, bases, outputs):
-            output_path = output_paths.get(method)
-            if not output_path:
-                continue
-            h, w = base.shape[:2]
-            resized = F.interpolate(cam.unsqueeze(0), size=(h, w), mode="bilinear", align_corners=False).squeeze()
-            resized = (resized - resized.min()) / (resized.max() - resized.min() + 1e-8)
-            # Saving runs on background threads, so the array must own a fully
-            # completed CPU copy. A non-blocking D2H copy can otherwise race
-            # with PNG encoding and produce partially transferred stripe bands.
-            cam_np = resized.detach().float().cpu().numpy().copy()
-            futures.append(save_pool.submit(_save_overlay, base, cam_np, output_path))
+    for target_index, target in enumerate(cam_targets):
+        gradients.clear()
+        model.zero_grad(set_to_none=True)
+        target_score = -score if target == "genuine" else score
+        target_score.backward(retain_graph=target_index < len(cam_targets) - 1)
+        if "value" not in gradients:
+            raise RuntimeError(f"Grad-CAM target layer did not produce gradients for rows {row_indices[:5]}")
+        gradient = gradients["value"].detach()
+        for method in cam_methods:
+            cam_batch = compute_cam(activation, gradient, config_key=config_key, method=method).float()
+            for cam, base, output_paths in zip(cam_batch, bases, outputs):
+                output_path = output_paths.get((method, target))
+                if not output_path:
+                    continue
+                h, w = base.shape[:2]
+                resized = F.interpolate(cam.unsqueeze(0), size=(h, w), mode="bilinear", align_corners=False).squeeze()
+                resized = (resized - resized.min()) / (resized.max() - resized.min() + 1e-8)
+                # Saving runs on background threads, so the array must own a fully
+                # completed CPU copy. A non-blocking D2H copy can otherwise race
+                # with PNG encoding and produce partially transferred stripe bands.
+                cam_np = resized.detach().float().cpu().numpy().copy()
+                futures.append(save_pool.submit(_save_overlay, base, cam_np, output_path))
     return futures
 
 
@@ -263,7 +275,8 @@ def pregenerate_csv(csv_path: Path, args: argparse.Namespace) -> tuple[int, int,
     skipped = 0
     failed = 0
     cam_methods = list(dict.fromkeys(args.cam_method))
-    jobs: list[tuple[int, Path, dict[str, Path]]] = []
+    cam_targets = list(dict.fromkeys(args.cam_target))
+    jobs: list[tuple[int, Path, dict[tuple[str, str], Path]]] = []
     progress = tqdm(filtered.iterrows(), total=len(filtered), desc=f"{config_key}: scan", unit="img")
     for row_index, row in progress:
         image_path = valid_image(row[image_column])
@@ -271,20 +284,27 @@ def pregenerate_csv(csv_path: Path, args: argparse.Namespace) -> tuple[int, int,
             failed += 1
             continue
 
-        missing_methods = [
-            method
+        missing_outputs = [
+            (method, target)
             for method in cam_methods
-            if not args.only_missing or existing_gradcam_for_image(config_key, image_path, method=method) is None
+            for target in cam_targets
+            if not args.only_missing
+            or existing_gradcam_for_image(config_key, image_path, method=method, target=target) is None
         ]
-        if not missing_methods:
+        if not missing_outputs:
             skipped += 1
             continue
 
         if args.dry_run:
-            generated += len(missing_methods)
+            generated += len(missing_outputs)
             continue
 
-        jobs.append((row_index, image_path, {method: output_path_for_image(config_key, image_path, args, method=method) for method in missing_methods}))
+        jobs.append((row_index, image_path, {
+            (method, target): output_path_for_image(
+                config_key, image_path, args, method=method, target=target
+            )
+            for method, target in missing_outputs
+        }))
     print(f"{csv_path.name}: scan queued={len(jobs)}, skipped={skipped}, failed={failed}")
 
     if args.dry_run:
@@ -338,7 +358,10 @@ def pregenerate_csv(csv_path: Path, args: argparse.Namespace) -> tuple[int, int,
                 if batch is None:
                     continue
                 try:
-                    futures = process_batch(config_key, bundle, batch, activations, gradients, save_pool, cam_methods)
+                    futures = process_batch(
+                        config_key, bundle, batch, activations, gradients,
+                        save_pool, cam_methods, cam_targets,
+                    )
                     pending.extend(futures)
                 except Exception as exc:
                     row_indices = batch[3]
@@ -421,6 +444,13 @@ def parse_args() -> argparse.Namespace:
         help="CAM method to generate. Repeat for both gradcam and gradcam++.",
     )
     parser.add_argument(
+        "--cam-target",
+        action="append",
+        default=None,
+        choices=["fraud", "genuine"],
+        help="Class evidence to visualize. Repeat to generate both fraud and genuine CAMs.",
+    )
+    parser.add_argument(
         "--output-root",
         type=Path,
         default=None,
@@ -452,6 +482,8 @@ def main() -> None:
         raise SystemExit("No configured CSVs found.")
     if args.cam_method is None:
         args.cam_method = ["gradcam"]
+    if args.cam_target is None:
+        args.cam_target = ["fraud"]
 
     totals = [pregenerate_csv(path, args) for path in csv_paths]
     generated = sum(item[0] for item in totals)

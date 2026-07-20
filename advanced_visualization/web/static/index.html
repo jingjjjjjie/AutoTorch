@@ -39,6 +39,7 @@
           <label class="field"><span>Image</span><select id="image-column"></select></label>
           <label class="field"><span>Grad-CAM</span><select id="gradcam-column"></select></label>
           <label class="field"><span>CAM method</span><select id="gradcam-method"><option value="gradcam">Grad-CAM</option><option value="gradcam++">Grad-CAM++</option></select></label>
+          <label class="field"><span>CAM target</span><select id="gradcam-target"><option value="fraud">Fraud evidence</option><option value="genuine">Genuine evidence</option></select></label>
           <label class="field"><span>Group</span><select id="subclass-column"></select></label>
           <label class="field"><span>Truth</span><select id="truth-column"></select></label>
           <label class="field"><span>Prediction</span><select id="prediction-column"></select></label>
@@ -92,6 +93,7 @@
           <label class="field"><span>Color by</span><select id="color-column"></select></label>
           <label class="field"><span>Image</span><select id="feature-image-column"></select></label>
           <label class="field"><span>Grad-CAM</span><select id="feature-gradcam-column"></select></label>
+          <label class="field"><span>CAM target</span><select id="feature-gradcam-target"><option value="fraud">Fraud evidence</option><option value="genuine">Genuine evidence</option></select></label>
           <label class="field"><span>Maximum rows</span><input id="max-rows" type="number" min="3" max="50000" value="5000"></label>
           <label class="field"><span>Set all subclass limits <output id="class-limit-value">5,000</output></span><input id="class-limit" type="range" min="1" max="5000" value="5000" step="1"></label>
           <details id="subclass-limits-panel" class="subclass-limits-panel hidden" open>

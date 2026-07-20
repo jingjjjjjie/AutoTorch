@@ -14,6 +14,7 @@ function requestPayload() {
     image_column: byId("image-column").value,
     gradcam_column: byId("gradcam-column").value,
     gradcam_method: byId("gradcam-method").value,
+    gradcam_target: byId("gradcam-target").value,
     subclass_column: byId("subclass-column").value,
     truth_column: byId("truth-column").value,
     prediction_column: byId("prediction-column").value,
@@ -91,8 +92,8 @@ function renderRows(rows, payload) {
     const score = row.values[payload.prediction_column];
     const confidence = row.values.__confidence;
     const panes = state.imageMode === "both"
-      ? imagePane(row.image_url, "Original") + imagePane(row.gradcam_url, "Grad-CAM")
-      : state.imageMode === "gradcam" ? imagePane(row.gradcam_url, "Grad-CAM") : imagePane(row.image_url, "Original");
+      ? imagePane(row.image_url, "Original") + imagePane(row.gradcam_url, `${payload.gradcam_target === "genuine" ? "Genuine" : "Fraud"} CAM`)
+      : state.imageMode === "gradcam" ? imagePane(row.gradcam_url, `${payload.gradcam_target === "genuine" ? "Genuine" : "Fraud"} CAM`) : imagePane(row.image_url, "Original");
     const card = document.createElement("article");
     card.className = "card";
     card.innerHTML = `<div class="card-images">${panes}</div><div class="card-body">

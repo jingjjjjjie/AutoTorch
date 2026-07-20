@@ -42,6 +42,6 @@ def compute_cam(activation: torch.Tensor, gradient: torch.Tensor, config_key: st
     return engine_for_config(config).compute_cam(activation, gradient, method=method)
 
 
-def generate_gradcam(config_key: str, image_path: Path) -> Path:
+def generate_gradcam(config_key: str, image_path: Path, target: str = "fraud") -> Path:
     config = config_for_key(config_key)
-    return engine_for_config(config).generate(config, image_path)
+    return engine_for_config(config).generate(config, image_path, target=target)

@@ -47,6 +47,7 @@ async function showPoint(point, showError) {
       item_id_column: byId("item-column").value,
       prediction_column: byId("prediction-column").value,
       group_column: byId("color-column").value,
+      gradcam_target: byId("feature-gradcam-target").value,
     });
     if (requestId !== pointRequest || state.source.id !== sourceId) return;
     detail.replaceChildren();
@@ -65,10 +66,11 @@ async function showPoint(point, showError) {
     }
     if (metadata.children.length) detail.append(metadata);
 
+    const targetLabel = byId("feature-gradcam-target").value === "genuine" ? "Genuine" : "Fraud";
     const media = [
       ["Original", result.image_url],
-      ["Grad-CAM", result.gradcam_url],
-      ["Grad-CAM++", result.gradcam_plus_url],
+      [`${targetLabel} Grad-CAM`, result.gradcam_url],
+      [`${targetLabel} Grad-CAM++`, result.gradcam_plus_url],
     ].filter(([, url]) => url);
     if (!media.length) {
       const empty = document.createElement("div");

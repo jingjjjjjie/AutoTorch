@@ -219,6 +219,18 @@ python advanced_visualization/cli/pregenerate_gradcam.py \
   --limit 20
 ```
 
+Generate both binary-class targets by repeating `--cam-target`. Fraud uses the
+pre-sigmoid classifier logit; genuine uses its negation:
+
+```bash
+python advanced_visualization/cli/pregenerate_gradcam.py \
+  --csv /path/to/model_artifact_dir/prepared_predictions.csv \
+  --cam-method gradcam \
+  --cam-target fraud \
+  --cam-target genuine \
+  --no-only-missing
+```
+
 ## Docker
 
 Build and run the recommended FastAPI web viewer:

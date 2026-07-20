@@ -12,6 +12,7 @@ class FilterRequest(BaseModel):
     image_column: str = ""
     gradcam_column: str = ""
     gradcam_method: Literal["gradcam", "gradcam++"] = "gradcam"
+    gradcam_target: Literal["fraud", "genuine"] = "fraud"
     subclass_column: str = ""
     truth_column: str = ""
     prediction_column: str = ""

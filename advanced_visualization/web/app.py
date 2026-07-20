@@ -113,12 +113,18 @@ def review(request: FilterRequest) -> dict:
     rows = []
     for _, row in page.iterrows():
         row_id = int(row["__row_id"])
-        gradcam_url = _image_url(request.source_id, row_id, request.gradcam_column)
+        gradcam_url = (
+            _image_url(request.source_id, row_id, request.gradcam_column)
+            if request.gradcam_target == "fraud" else ""
+        )
         if not gradcam_url and request.image_column:
-            path = _prepared_gradcam_path(source, row, request.image_column, request.gradcam_method)
+            path = _prepared_gradcam_path(
+                source, row, request.image_column, request.gradcam_method, request.gradcam_target
+            )
             if path is not None:
                 gradcam_url = _prepared_gradcam_url(
-                    request.source_id, row_id, request.image_column, request.gradcam_method
+                    request.source_id, row_id, request.image_column,
+                    request.gradcam_method, request.gradcam_target,
                 )
         rows.append({
             "row_id": row_id,
@@ -143,22 +149,32 @@ def projection(request: ProjectionRequest) -> dict:
     return result
 
 
-def _prepared_gradcam_path(source: DataSource, row: pd.Series, image_column: str, method: str) -> Path | None:
+def _prepared_gradcam_path(
+    source: DataSource,
+    row: pd.Series,
+    image_column: str,
+    method: str,
+    target: str = "fraud",
+) -> Path | None:
     if not source.artifact_dir or image_column not in row.index:
         return None
     image_path = valid_image(row[image_column])
     if image_path is None:
         return None
-    for candidate in gradcam_cache_candidates(source.artifact_dir / "gradcam", image_path, method=method):
+    for candidate in gradcam_cache_candidates(
+        source.artifact_dir / "gradcam", image_path, method=method, target=target
+    ):
         if candidate.is_file():
             return candidate
     return None
 
 
-def _prepared_gradcam_url(source_id: str, row_id: int, image_column: str, method: str) -> str:
+def _prepared_gradcam_url(
+    source_id: str, row_id: int, image_column: str, method: str, target: str = "fraud"
+) -> str:
     return (
         f"/api/gradcam/{source_id}/{row_id}?image_column={quote(image_column, safe='')}"
-        f"&method={quote(method, safe='')}"
+        f"&method={quote(method, safe='')}&target={quote(target, safe='')}"
     )
 
 
@@ -171,6 +187,7 @@ def point_detail(
     item_id_column: str = "",
     prediction_column: str = "",
     group_column: str = "",
+    gradcam_target: str = "fraud",
 ) -> dict:
     try:
         source = repository.source(source_id)
@@ -180,6 +197,8 @@ def point_detail(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     if row_id < 0 or row_id >= len(frame):
         raise HTTPException(status_code=404, detail="Row does not exist.")
+    if gradcam_target not in {"fraud", "genuine"}:
+        raise HTTPException(status_code=400, detail="CAM target must be fraud or genuine.")
     row = frame.iloc[row_id]
     allowed_images = set(schema_details["image_columns"])
     image_column = image_column if image_column in allowed_images else ""
@@ -189,13 +208,22 @@ def point_detail(
         if column and column in row.index:
             values[column] = _json_value(row[column])
 
-    gradcam_url = _image_url(source_id, row_id, gradcam_column, max_side=900) if gradcam_column else ""
+    gradcam_url = (
+        _image_url(source_id, row_id, gradcam_column, max_side=900)
+        if gradcam_column and gradcam_target == "fraud" else ""
+    )
     gradcam_plus_url = ""
     if image_column:
-        if not gradcam_url and _prepared_gradcam_path(source, row, image_column, "gradcam"):
-            gradcam_url = _prepared_gradcam_url(source_id, row_id, image_column, "gradcam")
-        if _prepared_gradcam_path(source, row, image_column, "gradcam++"):
-            gradcam_plus_url = _prepared_gradcam_url(source_id, row_id, image_column, "gradcam++")
+        if not gradcam_url and _prepared_gradcam_path(
+            source, row, image_column, "gradcam", gradcam_target
+        ):
+            gradcam_url = _prepared_gradcam_url(
+                source_id, row_id, image_column, "gradcam", gradcam_target
+            )
+        if _prepared_gradcam_path(source, row, image_column, "gradcam++", gradcam_target):
+            gradcam_plus_url = _prepared_gradcam_url(
+                source_id, row_id, image_column, "gradcam++", gradcam_target
+            )
     return {
         "row_id": row_id,
         "values": values,
@@ -212,6 +240,7 @@ def prepared_gradcam(
     image_column: str = Query(...),
     method: str = Query("gradcam", pattern=r"^(gradcam|gradcam\+\+)$"),
     max_side: int = Query(900, ge=0, le=4096),
+    target: str = "fraud",
 ) -> Response:
     try:
         source = repository.source(source_id)
@@ -221,11 +250,15 @@ def prepared_gradcam(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     if image_column not in schema_details["image_columns"]:
         raise HTTPException(status_code=400, detail="Column is not an image-path column.")
+    if target not in {"fraud", "genuine"}:
+        raise HTTPException(status_code=400, detail="CAM target must be fraud or genuine.")
     if row_id < 0 or row_id >= len(frame):
         raise HTTPException(status_code=404, detail="Row does not exist.")
-    path = _prepared_gradcam_path(source, frame.iloc[row_id], image_column, method)
+    path = _prepared_gradcam_path(source, frame.iloc[row_id], image_column, method, target)
     if path is None:
-        raise HTTPException(status_code=404, detail=f"Prepared {method} does not exist for this row.")
+        raise HTTPException(
+            status_code=404, detail=f"Prepared {target} {method} does not exist for this row."
+        )
     try:
         content, etag = image_bytes(path, max_side=max_side)
     except FileNotFoundError as exc:

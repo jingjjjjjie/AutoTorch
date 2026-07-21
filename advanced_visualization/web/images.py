@@ -1,4 +1,5 @@
 """Validated image lookup and thumbnail generation."""
+
 from __future__ import annotations
 
 import io
@@ -16,7 +17,10 @@ MAX_CACHED_SIDE = 1440
 def _render_image(path: str, max_side: int) -> bytes:
     try:
         with Image.open(path) as image:
-            image = ImageOps.exif_transpose(image).convert("RGB")
+            transposed = ImageOps.exif_transpose(image)
+            if transposed is None:
+                raise FileNotFoundError("Image orientation could not be normalized.")
+            image = transposed.convert("RGB")
             if max_side > 0:
                 image.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
             output = io.BytesIO()
@@ -40,4 +44,6 @@ def image_bytes(path_value, max_side: int = 900) -> tuple[bytes, str]:
     stat = resolved.stat()
     if max_side == 0 or max_side > MAX_CACHED_SIDE:
         return _render_image(str(resolved), max_side), str(stat.st_mtime_ns)
-    return _thumbnail(str(resolved), stat.st_mtime_ns, stat.st_size, max_side), str(stat.st_mtime_ns)
+    return _thumbnail(str(resolved), stat.st_mtime_ns, stat.st_size, max_side), str(
+        stat.st_mtime_ns
+    )

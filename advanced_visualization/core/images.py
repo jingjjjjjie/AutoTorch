@@ -1,4 +1,5 @@
 """Image path, loading, and cache-key helpers."""
+
 from __future__ import annotations
 
 import base64
@@ -14,7 +15,9 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 from advanced_visualization.core.config import IMAGE_EXTENSIONS
 
-DEFAULT_PREVIEW_MAX_SIDE = int(os.environ.get("AUTOTORCH_IMAGE_PREVIEW_MAX_SIDE", "900"))
+DEFAULT_PREVIEW_MAX_SIDE = int(
+    os.environ.get("AUTOTORCH_IMAGE_PREVIEW_MAX_SIDE", "900")
+)
 DEFAULT_ZOOM_MAX_SIDE = int(os.environ.get("AUTOTORCH_IMAGE_ZOOM_MAX_SIDE", "0"))
 DEFAULT_JPEG_QUALITY = int(os.environ.get("AUTOTORCH_IMAGE_PREVIEW_JPEG_QUALITY", "86"))
 
@@ -22,10 +25,22 @@ DEFAULT_JPEG_QUALITY = int(os.environ.get("AUTOTORCH_IMAGE_PREVIEW_JPEG_QUALITY"
 def valid_image(path_value) -> Optional[Path]:
     if pd.isna(path_value):
         return None
+    for path in image_path_candidates(path_value):
+        if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS:
+            return path
+    return None
+
+
+def image_path_candidates(path_value) -> list[Path]:
+    """Return configured path plus known mount aliases, in preference order."""
+    if pd.isna(path_value):
+        return []
     path = Path(str(path_value)).expanduser()
-    if not path.is_file() or path.suffix.lower() not in IMAGE_EXTENSIONS:
-        return None
-    return path
+    candidates = [path]
+    raw = str(path)
+    if raw.startswith("/routine_data/"):
+        candidates.append(Path("/mnt5") / raw.lstrip("/"))
+    return candidates
 
 
 def _image_signature(path_value) -> Optional[tuple[str, int, int]]:
@@ -41,11 +56,16 @@ def _image_signature(path_value) -> Optional[tuple[str, int, int]]:
 
 
 @lru_cache(maxsize=4096)
-def _load_image_cached(raw_path: str, mtime_ns: int, size_bytes: int, max_side: int) -> Optional[Image.Image]:
+def _load_image_cached(
+    raw_path: str, mtime_ns: int, size_bytes: int, max_side: int
+) -> Optional[Image.Image]:
     del mtime_ns, size_bytes
     try:
         with Image.open(raw_path) as image:
-            loaded = ImageOps.exif_transpose(image).convert("RGB")
+            transposed = ImageOps.exif_transpose(image)
+            if transposed is None:
+                return None
+            loaded = transposed.convert("RGB")
             if max_side > 0:
                 loaded.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
             return loaded.copy()
@@ -53,7 +73,9 @@ def _load_image_cached(raw_path: str, mtime_ns: int, size_bytes: int, max_side: 
         return None
 
 
-def load_image(path_value, max_side: int = DEFAULT_PREVIEW_MAX_SIDE) -> Optional[Image.Image]:
+def load_image(
+    path_value, max_side: int = DEFAULT_PREVIEW_MAX_SIDE
+) -> Optional[Image.Image]:
     signature = _image_signature(path_value)
     if signature is None:
         return None
@@ -93,14 +115,6 @@ def image_path_to_data_uri(
     return _image_path_to_data_uri_cached(*signature, int(max_side), int(quality))
 
 
-def _alternate_cache_paths(path: Path) -> list[Path]:
-    paths = [path]
-    raw = str(path)
-    if raw.startswith("/routine_data/"):
-        paths.append(Path("/mnt5") / raw.lstrip("/"))
-    return paths
-
-
 def _cached_image_cache_digest(raw_path: str) -> Optional[str]:
     image_path = Path(raw_path).expanduser()
     if not image_path.is_file() or image_path.suffix.lower() not in IMAGE_EXTENSIONS:
@@ -118,7 +132,7 @@ def image_cache_digests(path_value) -> list[str]:
     if pd.isna(path_value):
         return []
     digests: list[str] = []
-    for path in _alternate_cache_paths(Path(str(path_value)).expanduser()):
+    for path in image_path_candidates(path_value):
         digest = _cached_image_cache_digest(str(path))
         if digest and digest not in digests:
             digests.append(digest)

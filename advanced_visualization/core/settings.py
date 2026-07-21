@@ -1,4 +1,5 @@
 """Persistent user settings for visualization paths and model runs."""
+
 from __future__ import annotations
 
 import json
@@ -37,8 +38,12 @@ class UserModelConfig:
             feature_csv=str(payload.get("feature_csv", "")),
             artifact_dir=str(payload.get("artifact_dir", "")),
             checkpoint=str(payload.get("checkpoint", "")),
-            weights_epoch=int(weights_epoch) if str(weights_epoch or "").strip() else None,
-            model_type=str(payload.get("model_type", payload.get("gradcam_engine", ""))),
+            weights_epoch=(
+                int(str(weights_epoch)) if str(weights_epoch or "").strip() else None
+            ),
+            model_type=str(
+                payload.get("model_type", payload.get("gradcam_engine", ""))
+            ),
             model_name=str(payload.get("model_name", "")),
             head_type=str(payload.get("head_type", "")),
             image_size=int(payload.get("image_size") or 0),
@@ -70,7 +75,11 @@ class UserModelConfig:
         if self.checkpoint.strip():
             return configured_path(self.checkpoint)
         if self.artifact_dir.strip() and self.weights_epoch is not None:
-            return configured_path(self.artifact_dir) / "checkpoints" / f"epoch_{self.weights_epoch}.pt"
+            return (
+                configured_path(self.artifact_dir)
+                / "checkpoints"
+                / f"epoch_{self.weights_epoch}.pt"
+            )
         return None
 
 
@@ -95,7 +104,12 @@ DEFAULT_EXTRA_VIEW_CONFIGS = [
             {
                 "key": "ori",
                 "label": "Ori",
-                "image_candidates": ["absolute_ori_path", "ori_path", "image_path", "path"],
+                "image_candidates": [
+                    "absolute_ori_path",
+                    "ori_path",
+                    "image_path",
+                    "path",
+                ],
             },
         ],
         "layers": [
@@ -111,8 +125,20 @@ DEFAULT_EXTRA_VIEW_CONFIGS = [
             {"key": "norm4", "label": "norm4"},
         ],
         "default_layer": "montage",
-        "prediction_candidates": ["tf_parallel_pred", "tf_crop_pred", "tf_ori_pred", "ypred_raw", "pred", "score"],
-        "metadata_columns": ["Recapture_Subclass", "Data_Identity", "Quality_Issue", "fraud_type"],
+        "prediction_candidates": [
+            "tf_parallel_pred",
+            "tf_crop_pred",
+            "tf_ori_pred",
+            "ypred_raw",
+            "pred",
+            "score",
+        ],
+        "metadata_columns": [
+            "Recapture_Subclass",
+            "Data_Identity",
+            "Quality_Issue",
+            "fraud_type",
+        ],
     },
     {
         "model_type": "unireplknet",
@@ -126,11 +152,20 @@ DEFAULT_EXTRA_VIEW_CONFIGS = [
             {
                 "key": "image",
                 "label": "Image",
-                "image_candidates": ["absolute_ori_path", "absolute_ocr_path", "image_path", "path"],
+                "image_candidates": [
+                    "absolute_ori_path",
+                    "absolute_ocr_path",
+                    "image_path",
+                    "path",
+                ],
             }
         ],
         "layers": [
-            {"key": "default", "label": "Prepared Grad-CAM", "column_candidates": ["gradcam_path", "gradcam", "heatmap_path"]},
+            {
+                "key": "default",
+                "label": "Prepared Grad-CAM",
+                "column_candidates": ["gradcam_path", "gradcam", "heatmap_path"],
+            },
             {"key": "stage4", "label": "stage4"},
         ],
         "prediction_candidates": ["prediction", "pred", "prob", "score", "result"],
@@ -167,16 +202,30 @@ class UserSettings:
             default_gradcam_root=str(payload.get("default_gradcam_root", "")),
             image_columns=[str(item) for item in payload.get("image_columns", [])],
             id_columns=[str(item) for item in payload.get("id_columns", [])],
-            subclass_columns=[str(item) for item in payload.get("subclass_columns", [])],
-            image_extensions=[str(item) for item in payload.get("image_extensions", [])],
+            subclass_columns=[
+                str(item) for item in payload.get("subclass_columns", [])
+            ],
+            image_extensions=[
+                str(item) for item in payload.get("image_extensions", [])
+            ],
             normalize_mean=[float(item) for item in payload.get("normalize_mean", [])],
             normalize_std=[float(item) for item in payload.get("normalize_std", [])],
             review=dict(payload.get("review", {})),
-            model_type_options=[str(item) for item in payload.get("model_type_options", [])],
-            image_size_options=[int(item) for item in payload.get("image_size_options", [])],
-            extra_view_configs=list(payload.get("extra_view_configs", DEFAULT_EXTRA_VIEW_CONFIGS)),
+            model_type_options=[
+                str(item) for item in payload.get("model_type_options", [])
+            ],
+            image_size_options=[
+                int(item) for item in payload.get("image_size_options", [])
+            ],
+            extra_view_configs=list(
+                payload.get("extra_view_configs", DEFAULT_EXTRA_VIEW_CONFIGS)
+            ),
             pipeline=dict(payload.get("pipeline", {})),
-            models=[UserModelConfig.from_dict(item) for item in payload.get("models", []) if isinstance(item, dict)],
+            models=[
+                UserModelConfig.from_dict(item)
+                for item in payload.get("models", [])
+                if isinstance(item, dict)
+            ],
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -234,9 +283,15 @@ def configured_model_sources() -> list[tuple[str, Path | None, Path | None]]:
     for model in settings.models:
         if not model.enabled:
             continue
-        artifact_dir = configured_path(model.artifact_dir) if model.artifact_dir.strip() else None
-        raw_prediction_csv = model.prediction_csv.strip() or settings.prediction_csv.strip()
-        prediction_csv = configured_path(raw_prediction_csv) if raw_prediction_csv else None
+        artifact_dir = (
+            configured_path(model.artifact_dir) if model.artifact_dir.strip() else None
+        )
+        raw_prediction_csv = (
+            model.prediction_csv.strip() or settings.prediction_csv.strip()
+        )
+        prediction_csv = (
+            configured_path(raw_prediction_csv) if raw_prediction_csv else None
+        )
         if artifact_dir is not None or prediction_csv is not None:
             sources.append((model.key, artifact_dir, prediction_csv))
     return sources
@@ -250,7 +305,9 @@ def configured_path(raw_path: str) -> Path:
             repo_index = parts.index("AutoTorch")
             source_repo = Path(*parts[: repo_index + 1])
             mapped = PACKAGE_ROOT.parent.joinpath(*parts[repo_index + 1 :])
-            if source_repo != PACKAGE_ROOT.parent and (mapped.exists() or str(PACKAGE_ROOT.parent) == "/app"):
+            if source_repo != PACKAGE_ROOT.parent and (
+                mapped.exists() or str(PACKAGE_ROOT.parent) == "/app"
+            ):
                 return mapped
         if path.exists():
             return path

@@ -1,27 +1,18 @@
 """Feature projection service with bounded in-memory result caching."""
+
 from __future__ import annotations
 
 import hashlib
 import json
-import os
 import threading
 from collections import OrderedDict
-
-os.environ.setdefault("NUMBA_CACHE_DIR", "/tmp/autotorch_visualization_numba")
 
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
-from sklearn.decomposition import PCA
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.manifold import TSNE
-from sklearn.preprocessing import StandardScaler
 
+from advanced_visualization.core.projection import ProjectionParameters, project_matrix
 from advanced_visualization.web.models import ProjectionRequest
-
-
-MAX_TSNE_ROWS = 5000
-MAX_UMAP_ROWS = 50000
 
 
 def _labels(frame: pd.DataFrame, column: str) -> pd.Series:
@@ -39,10 +30,12 @@ def _item_ids(frame: pd.DataFrame, column: str) -> pd.Series:
 def _stable_sample(frame: pd.DataFrame, rows: int, random_state: int) -> pd.DataFrame:
     if len(frame) <= rows:
         return frame
-    keys = pd.DataFrame({
-        "row_id": frame["__row_id"].to_numpy(),
-        "random_state": np.full(len(frame), random_state, dtype=np.int64),
-    })
+    keys = pd.DataFrame(
+        {
+            "row_id": frame["__row_id"].to_numpy(),
+            "random_state": np.full(len(frame), random_state, dtype=np.int64),
+        }
+    )
     ranks = pd.util.hash_pandas_object(keys, index=False).to_numpy()
     positions = np.argsort(ranks, kind="stable")[:rows]
     return frame.iloc[positions].sort_index()
@@ -62,14 +55,20 @@ def _limit_per_class(
     for label, index in labels.groupby(labels, sort=True).groups.items():
         group = frame.loc[index]
         rows = rows_by_class.get(label, default_rows)
-        sampled.append(_stable_sample(group, rows, random_state) if rows is not None else group)
+        sampled.append(
+            _stable_sample(group, rows, random_state) if rows is not None else group
+        )
     return pd.concat(sampled).sort_index() if sampled else frame.iloc[0:0]
 
 
 def _complete_feature_mask(frame: pd.DataFrame, columns: list[str]) -> pd.Series:
     """Find complete feature rows without converting columns that are already numeric."""
-    numeric_columns = [column for column in columns if is_numeric_dtype(frame[column].dtype)]
-    non_numeric_columns = [column for column in columns if column not in numeric_columns]
+    numeric_columns = [
+        column for column in columns if is_numeric_dtype(frame[column].dtype)
+    ]
+    non_numeric_columns = [
+        column for column in columns if column not in numeric_columns
+    ]
     valid = pd.Series(True, index=frame.index, dtype=bool)
     if numeric_columns:
         valid &= frame[numeric_columns].notna().all(axis=1)
@@ -84,8 +83,12 @@ class ProjectionService:
         self._cache: OrderedDict[str, dict] = OrderedDict()
         self._lock = threading.RLock()
 
-    def project(self, frame: pd.DataFrame, request: ProjectionRequest, version: str) -> dict:
-        columns = [column for column in request.feature_columns if column in frame.columns]
+    def project(
+        self, frame: pd.DataFrame, request: ProjectionRequest, version: str
+    ) -> dict:
+        columns = [
+            column for column in request.feature_columns if column in frame.columns
+        ]
         if not columns:
             raise ValueError("No valid feature columns were selected.")
         if request.method == "pca" and len(columns) < 2:
@@ -95,7 +98,9 @@ class ProjectionService:
             column: sorted(set(values))
             for column, values in request.categorical_filters.items()
         }
-        key = hashlib.sha1(json.dumps(key_data, sort_keys=True).encode("utf-8")).hexdigest()
+        key = hashlib.sha1(
+            json.dumps(key_data, sort_keys=True).encode("utf-8")
+        ).hexdigest()
         with self._lock:
             if key in self._cache:
                 self._cache.move_to_end(key)
@@ -108,12 +113,19 @@ class ProjectionService:
             if not values:
                 candidate = candidate.iloc[0:0]
                 break
-            candidate = candidate[candidate[column].fillna("Missing").astype(str).isin(values)]
+            candidate = candidate[
+                candidate[column].fillna("Missing").astype(str).isin(values)
+            ]
         if request.method == "lda":
-            if not request.color_column or request.color_column not in candidate.columns:
+            if (
+                not request.color_column
+                or request.color_column not in candidate.columns
+            ):
                 raise ValueError("LDA requires a valid class/group column in Color by.")
             candidate = candidate[candidate[request.color_column].notna()]
-        has_class_limits = request.max_rows_per_class is not None or bool(request.max_rows_by_class)
+        has_class_limits = request.max_rows_per_class is not None or bool(
+            request.max_rows_by_class
+        )
         if has_class_limits and request.color_column not in candidate.columns:
             raise ValueError("Per-class limit requires a valid Color by column.")
         candidate = candidate.loc[_complete_feature_mask(candidate, columns)]
@@ -130,46 +142,24 @@ class ProjectionService:
         matrix = working[columns].to_numpy(dtype=np.float32)
         if len(matrix) < 3:
             raise ValueError("At least three complete feature rows are required.")
-        if request.scale:
-            matrix = StandardScaler().fit_transform(matrix)
-        subtitle = ""
-        if request.method == "pca":
-            reducer = PCA(n_components=2, random_state=request.random_state)
-            coords = reducer.fit_transform(matrix)
-            subtitle = "Explained variance: " + ", ".join(f"{value:.1%}" for value in reducer.explained_variance_ratio_)
-        elif request.method == "tsne":
-            if len(matrix) > MAX_TSNE_ROWS:
-                raise ValueError(f"t-SNE is limited to {MAX_TSNE_ROWS} rows.")
-            perplexity = min(request.perplexity, max(2, len(matrix) - 1))
-            coords = TSNE(
-                n_components=2, perplexity=perplexity, init="pca", learning_rate="auto",
+        labels = (
+            working[request.color_column].astype(str).to_numpy()
+            if request.method == "lda"
+            else None
+        )
+        projection = project_matrix(
+            matrix,
+            ProjectionParameters(
+                method=request.method,
+                scale=request.scale,
+                perplexity=request.perplexity,
+                umap_neighbors=request.umap_neighbors,
+                umap_min_dist=request.umap_min_dist,
                 random_state=request.random_state,
-            ).fit_transform(matrix)
-        elif request.method == "umap":
-            if len(matrix) > MAX_UMAP_ROWS:
-                raise ValueError(f"UMAP is limited to {MAX_UMAP_ROWS} rows.")
-            try:
-                from umap import UMAP
-            except ImportError as exc:
-                raise ValueError("UMAP requires the umap-learn package.") from exc
-            coords = UMAP(
-                n_components=2,
-                n_neighbors=min(request.umap_neighbors, max(2, len(matrix) - 1)),
-                min_dist=request.umap_min_dist,
-                random_state=request.random_state,
-                n_jobs=1,
-            ).fit_transform(matrix)
-        else:
-            target = working[request.color_column].astype(str)
-            class_count = target.nunique()
-            if class_count < 2:
-                raise ValueError("LDA requires at least two classes after filtering.")
-            if len(working) <= class_count:
-                raise ValueError("LDA requires more displayed rows than classes; increase the per-class limit.")
-            component_count = min(2, class_count - 1, matrix.shape[1])
-            coords = LinearDiscriminantAnalysis(n_components=component_count).fit_transform(matrix, target)
-            if component_count == 1:
-                coords = np.column_stack([coords[:, 0], np.zeros(len(coords), dtype=np.float32)])
+            ),
+            labels=labels,
+        )
+        coords = projection.values
 
         displayed_labels = _labels(working, request.color_column)
         displayed_item_ids = _item_ids(working, request.item_id_column)
@@ -182,13 +172,15 @@ class ProjectionService:
                 displayed_item_ids.tolist(),
             )
         ):
-            points.append({
-                "x": float(coords[position, 0]),
-                "y": float(coords[position, 1]),
-                "row_id": int(row_id),
-                "label": label,
-                "item_id": item_id,
-            })
+            points.append(
+                {
+                    "x": float(coords[position, 0]),
+                    "y": float(coords[position, 1]),
+                    "row_id": int(row_id),
+                    "label": label,
+                    "item_id": item_id,
+                }
+            )
         class_counts = [
             {
                 "label": label,
@@ -199,7 +191,7 @@ class ProjectionService:
         ]
         result = {
             "method": request.method,
-            "subtitle": subtitle,
+            "subtitle": projection.note,
             "rows": len(points),
             "available_rows": len(candidate),
             "class_counts": class_counts,

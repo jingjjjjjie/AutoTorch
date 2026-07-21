@@ -1,10 +1,14 @@
 """Cached Grad-CAM path helpers used by the lightweight viewer."""
+
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Optional
 
-from advanced_visualization.core.config import DEFAULT_GRADCAM_ROOT, gradcam_artifact_root
+from advanced_visualization.core.config import (
+    DEFAULT_GRADCAM_ROOT,
+    gradcam_artifact_root,
+)
 from advanced_visualization.core.images import image_cache_digest, valid_image
 
 
@@ -114,17 +118,24 @@ def priority_index(name: str, priority: tuple[str, ...]) -> int:
     return len(priority)
 
 
-def gradcam_file_index(root: str, method: str = "", target: str = "fraud") -> dict[str, str]:
+def gradcam_file_index(
+    root: str, method: str = "", target: str = "fraud"
+) -> dict[str, str]:
     root_path = Path(root).expanduser()
     if not root_path.exists():
         return {}
     if target == "genuine":
         priority = GENUINE_GRADCAM_METHOD_PRIORITY.get(
-            method, tuple(marker for markers in GENUINE_GRADCAM_METHOD_PRIORITY.values() for marker in markers)
+            method,
+            tuple(
+                marker
+                for markers in GENUINE_GRADCAM_METHOD_PRIORITY.values()
+                for marker in markers
+            ),
         )
     else:
         priority = GRADCAM_METHOD_PRIORITY.get(method, GRADCAM_PRIORITY)
-    index = {}
+    index: dict[str, str] = {}
     for path in root_path.glob("*.png"):
         is_genuine = "_genuine" in path.name.lower()
         if is_genuine != (target == "genuine"):
@@ -187,7 +198,11 @@ def resolve_gradcam_path(row, controls: dict):
 
     for root in roots:
         for candidate in gradcam_cache_candidates(
-            root, image_path, method=method, space=space, target=controls.get("cam_target", "fraud")
+            root,
+            image_path,
+            method=method,
+            space=space,
+            target=controls.get("cam_target", "fraud"),
         ):
             if candidate.is_file():
                 return candidate

@@ -2,6 +2,7 @@
 
 New model-specific implementations belong in `advanced_visualization.models`.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -9,10 +10,11 @@ from pathlib import Path
 import torch
 
 from advanced_visualization.core.config import ModelRunConfig, all_model_runs
+from advanced_visualization.models.base import GradcamBundle, GradcamEngine
 from advanced_visualization.models.registry import get_gradcam_engine
 
 
-def engine_for_config(config: ModelRunConfig):
+def engine_for_config(config: ModelRunConfig) -> GradcamEngine:
     return get_gradcam_engine(config.gradcam_engine)
 
 
@@ -23,19 +25,26 @@ def config_for_key(config_key: str) -> ModelRunConfig:
     return model_runs[config_key]
 
 
-def load_gradcam_bundle(config_key: str) -> dict:
+def load_gradcam_bundle(config_key: str) -> GradcamBundle:
     config = config_for_key(config_key)
     return engine_for_config(config).load_bundle(config)
 
 
-def gradcam_score(model: torch.nn.Module, input_tensor: torch.Tensor, config_key: str | None = None) -> torch.Tensor:
+def gradcam_score(
+    model: torch.nn.Module, input_tensor: torch.Tensor, config_key: str | None = None
+) -> torch.Tensor:
     if config_key is None:
         config_key = next(iter(all_model_runs()))
     config = config_for_key(config_key)
     return engine_for_config(config).score(model, input_tensor)
 
 
-def compute_cam(activation: torch.Tensor, gradient: torch.Tensor, config_key: str | None = None, method: str = "gradcam") -> torch.Tensor:
+def compute_cam(
+    activation: torch.Tensor,
+    gradient: torch.Tensor,
+    config_key: str | None = None,
+    method: str = "gradcam",
+) -> torch.Tensor:
     if config_key is None:
         config_key = next(iter(all_model_runs()))
     config = config_for_key(config_key)

@@ -1,319 +1,77 @@
-# AutoTorch Visualization
+# AutoTorch Advanced Visualization
 
-## Fast Web App
-
-The recommended high-performance viewer is a browser application backed by
-FastAPI. It does not use Streamlit:
+The recommended interface is the FastAPI browser application:
 
 ```bash
 python -m advanced_visualization.web.app
 ```
 
-Open `http://localhost:8000`.
+Open <http://localhost:8000>. The application provides four focused pages:
 
-The implementation is intentionally separated by responsibility:
+- **Image review** — filter predictions, inspect failures, and compare originals with prepared Grad-CAM artifacts.
+- **Feature space** — PCA, t-SNE, UMAP, or LDA projections with point-level image inspection.
+- **Compare models** — align two experiment outputs and show what A gets right that B gets wrong, and vice versa.
+- **Results analysis** — reproduce the reporting and image-inspection workflow from `src/eval/idfraud/annotation/visualize_and_analyze_results.ipynb`.
 
-```text
-advanced_visualization/web/app.py          HTTP routes only
-advanced_visualization/web/models.py       request/response contracts
-advanced_visualization/web/repository.py   source discovery and CSV cache
-advanced_visualization/web/filtering.py    review filtering and paging
-advanced_visualization/web/projections.py  projection computation/cache
-advanced_visualization/web/comparisons.py  comparison paging and artifact URLs
-advanced_visualization/web/analysis.py     notebook-analysis application service
-advanced_visualization/web/images.py       image validation/thumbnails
-advanced_visualization/web/static/         browser interface
+The comparison page can launch independent A and B image viewers in separate tabs. Each viewer receives its own source, columns, threshold, image, and CAM settings in the URL, so its state is isolated.
 
-advanced_visualization/core/evaluation.py  shared binary evaluation semantics
-advanced_visualization/core/comparison.py  ID alignment and A/B outcome logic
-advanced_visualization/core/analysis.py    ori/crop/merged metrics and grouping
-```
+## Documentation
 
-The dependency direction is deliberate: framework-independent dataframe logic
-lives in `core`, HTTP orchestration lives in `web`, and each browser page has its
-own JavaScript module. New views should reuse the core services rather than
-copying filtering, failure, image, or metric logic into a page.
+- [User guide](docs/USER_GUIDE.md) — configuration, launch commands, workflows, and troubleshooting.
+- [Architecture](docs/ARCHITECTURE.md) — module boundaries, dependency direction, and request/data flow.
+- [Extending the system](docs/EXTENDING.md) — add a source, model engine, page, or API capability without copying logic.
+- [Codex/session handoff](docs/CODEX_HANDOFF.md) — invariants, verification commands, and maintenance checklist.
+- [Model integration handoffs](handoff_docs/README.md) — model/export-specific background documents.
 
-CSV dataframes are cached by file modification time, feature columns are loaded
-as `float32`, filtering and paging happen on the server, images are lazy-loaded,
-and generated thumbnails are cached. Feature projections are also cached by
-dataset version and projection parameters.
+## Configure data
 
-Review and feature data use separate caches. Image review excludes embedding
-columns entirely, so opening a prepared CSV with hundreds of feature columns
-does not load the feature matrix. The matrix is loaded only when a projection is
-requested.
-
-The web viewer supports simultaneous categorical filters with multi-value
-checkboxes. Filters carry from a prepared source to its matching feature export.
-Feature Space provides PCA, t-SNE, UMAP, and LDA plus fullscreen plotting and a
-selected-point inspector for original images, prepared Grad-CAM, Grad-CAM++, and
-explicit montage artifacts. The filter sidebar can be collapsed on desktop and
-opens as a drawer on mobile.
-
-The feature canvas supports cursor-centered wheel zoom, drag-to-pan, reset,
-hover and click inspection, and clickable subclass visibility controls. Its
-sidebar reports the live visible-image count and can deterministically cap each
-selected color subclass independently before applying the global projection-row
-limit. The shared subclass slider provides a quick baseline, with per-subclass
-sliders directly below it for targeted overrides.
-
-The image-review grid adapts its effective columns, preview height, and thumbnail
-resolution to the number and width of visible cards. Clicking any review or
-feature-inspector image opens the shared zoom viewer with wheel, button,
-double-click, keyboard, and drag-to-pan controls. The viewer loads a 2K preview
-first and requests 4K detail only after zooming in.
-
-### Compare Models
-
-`Compare models` aligns two sources by stable sample ID and partitions results
-into:
-
-- both correct
-- Experiment A only correct
-- Experiment B only correct
-- both wrong
-- unscored, truth mismatch, and rows present in only one source
-
-Truth mismatches are quarantined instead of being counted as model failures.
-Repeated IDs are aligned by occurrence to avoid a Cartesian join, and duplicate
-counts are reported in the alignment summary. Each result card shows the A/B
-scores, failure transition, source images, and prepared CAMs. Matrix cells are
-clickable filters.
-
-Use `Open A viewer` and `Open B viewer` to launch independent image-review tabs.
-Each URL contains its own source, columns, threshold, image, and CAM target, so
-changing one viewer does not change the other.
-
-### Results Analysis
-
-`Results analysis` replaces the reporting and image-inspection parts of
-`src/eval/idfraud/annotation/visualize_and_analyze_results.ipynb`. For
-`joined_predictions.csv`, the page automatically selects the notebook's current
-original and crop prediction columns, threshold `0.01`, quality cleanup,
-`Unknown` subclass exclusion, and the two currently excluded data identities.
-
-The page calculates original, crop, and arithmetic-mean merged accuracy, APCER,
-and BPCER using the notebook's exact strict rule (`score > threshold`). It shows
-breakdowns by recapture subclass, data identity, and identity × subclass.
-Clicking a breakdown row drills into its images; the gallery displays original
-and crop images with all three predictions and failure states.
-
-Build the standalone web image with:
-
-```bash
-docker build -f advanced_visualization/Dockerfile.web -t autotorch-visualization-web .
-docker run --rm -p 8000:8000 \
-  -v /mnt5:/mnt5 -v /routine_data:/routine_data \
-  autotorch-visualization-web
-```
-
-## Legacy Streamlit App
-
-Unified Streamlit visualization for ID-fraud model review.
-
-Run:
+Settings live in `advanced_visualization/settings.json`. The legacy Streamlit settings page can edit this file:
 
 ```bash
 streamlit run advanced_visualization/unified_app.py
 ```
 
-The sidebar `Page` selector contains:
+The browser viewer reads enabled prediction/feature CSVs and artifact directories from the same settings. A viewer-only model can use `model_type: "artifact_only"`; checkpoint fields are required only for preparation commands that load a model.
 
-- `Image review`: prepared artifact gallery for predictions, prepared Grad-CAMs, filters, and failure buckets.
-- `Feature space`: embedding/projection explorer.
-- `Launch workspace`: settings-driven model-specific viewer clones such as VAN Small or UniRepLKNet workspaces.
-- `Settings`: prediction CSV and model artifact configuration.
+## Prepare artifacts
 
-## Settings
-
-Use the `Settings` page as the source of truth. It writes:
-
-```text
-advanced_visualization/settings.json
-```
-
-Define:
-
-- prediction CSV
-- model key
-- artifact directory
-- model type, currently `unireplknet` or `artifact_only`
-- prediction column
-
-The Settings page separates viewer data sources from CLI-only model-loading
-fields. The Streamlit viewer does not load checkpoint weights. Checkpoint path,
-weights epoch, model name, head type, and image size are only used by
-`prepare_all.py` / `pregenerate_gradcam.py`.
-
-The app no longer hardcodes model runs or a default prediction CSV. Configure
-them in the `Settings` page or edit `advanced_visualization/settings.json`.
-
-## Unified Pipeline
-
-The preferred preparation path is the single pipeline:
+Run the complete configured pipeline:
 
 ```bash
-python advanced_visualization/cli/prepare_all.py
+python -m advanced_visualization.cli.prepare_all
 ```
 
-It uses enabled models from `advanced_visualization/settings.json` and performs:
-
-1. standard artifact setup
-2. prepared CSV creation
-3. model forward pass for feature columns and prediction column
-4. prepared Grad-CAM overlay generation
-5. manifest writing
-
-You can also run one configured model:
+Or run the independent stages:
 
 ```bash
-python advanced_visualization/cli/prepare_all.py --model-key my_model_key
-```
-
-Useful options:
-
-```bash
---skip-features
---skip-gradcam
---limit 200
---batch-size 8
---gradcam-batch-size 16
-```
-
-The `Settings` page only edits configuration. Run preparation from the CLI so the viewer never generates Grad-CAM during browsing.
-
-## Feature Space
-
-Feature-space exploration is now part of this package:
-
-```text
-advanced_visualization/views/feature_space.py
-```
-
-Legacy helper scripts were moved to:
-
-```text
-advanced_visualization/cli/extract_unireplknet_t_features.py
-advanced_visualization/cli/create_feature_csv_template.py
-```
-
-Existing feature CSVs are stored under:
-
-```text
-advanced_visualization/output/
-```
-
-## Launchable Workspaces
-
-Model-specific viewer clones are launched from `Launch workspace`.
-Supported model types are configured in `advanced_visualization/settings.json`
-under `extra_view_configs`.
-
-Each config defines:
-
-- model type
-- branches, such as crop/ori/image
-- available Grad-CAM layers or montage outputs
-- Grad-CAM/montage path column template or explicit column candidates
-- default layer and prediction columns
-
-This is artifact-first. New model families normally do not need new Streamlit
-code if they export a prepared CSV with image paths, predictions, optional
-`feature_0000...` columns, and PNG explanation path columns. A model can export
-single-layer Grad-CAM PNGs or pre-rendered montage PNGs. Add or edit an
-`extra_view_configs` entry when the model needs different branches, layer
-options, or montage columns.
-
-The current VAN Small TensorFlow handoff is montage-only. Its launch workspace
-expects:
-
-```text
-tf_crop_layer_montage_path
-tf_ori_layer_montage_path
-```
-
-Per-layer VAN Small Grad-CAM path columns are optional for this delivery.
-
-Each launched workspace provides its own model-specific clone of:
-
-- image review
-- feature-space projection
-- configured layered Grad-CAM inspection
-
-The launcher opens workspaces through a query-param URL in a new tab, so the
-launched workspace is independent from the current app page and does not change
-the main viewer's selected page.
-
-## Lower-Level Commands
-
-Manifest and prepared CSV only:
-
-```bash
-python advanced_visualization/cli/preparation.py \
-  --artifact-dir /path/to/model_artifact_dir \
+python -m advanced_visualization.cli.preparation \
+  --artifact-dir /path/to/artifacts \
   --pred-csv /path/to/predictions.csv \
   --weights-epoch 11 \
-  --model-key my_model_key
-```
+  --model-key my_model
 
-Grad-CAM preparation only:
-
-```bash
-python advanced_visualization/cli/pregenerate_gradcam.py \
-  --csv /path/to/model_artifact_dir/prepared_predictions.csv \
-  --limit 20
-```
-
-Generate both binary-class targets by repeating `--cam-target`. Fraud uses the
-pre-sigmoid classifier logit; genuine uses its negation:
-
-```bash
-python advanced_visualization/cli/pregenerate_gradcam.py \
-  --csv /path/to/model_artifact_dir/prepared_predictions.csv \
+python -m advanced_visualization.cli.pregenerate_gradcam \
+  --csv /path/to/artifacts/prepared_predictions.csv \
   --cam-method gradcam \
-  --cam-target fraud \
-  --cam-target genuine \
-  --no-only-missing
+  --cam-target fraud
 ```
 
-## Docker
+Preparation is deliberately separate from browsing. The viewer serves existing data and artifacts; it does not load model checkpoints during ordinary page requests.
 
-Build and run the recommended FastAPI web viewer:
+## Legacy compatibility interface
+
+The Streamlit interface remains available for existing workflows:
+
+```bash
+streamlit run advanced_visualization/unified_app.py
+```
+
+It offers image review, feature space, launchable model workspaces, and settings. New user-facing functionality should normally be implemented in the browser app first; legacy views should reuse framework-neutral `core` services.
+
+## Container
 
 ```bash
 docker compose -f advanced_visualization/docker-compose.yml up --build advanced-visualization
 ```
 
-Open:
-
-```text
-http://localhost:8000
-```
-
-Compose builds `Dockerfile.web` and mounts the repo at `/app`, so the container
-runs the current web implementation. If your configured artifact paths
-live outside the repo, add the required bind mount in
-`advanced_visualization/docker-compose.yml`.
-
-## Model-Specific Code
-
-Model-specific Grad-CAM implementations live under:
-
-```text
-advanced_visualization/models/<model_type>/gradcam.py
-```
-
-Current folder:
-
-- `models/unireplknet/gradcam.py`
-
-Future model families should add their own folder and register the engine in
-`advanced_visualization/models/registry.py`. Model-specific behavior includes
-model construction, checkpoint loading, preprocessing, target layer selection,
-score selection, CAM computation, and any model-specific feature extraction
-logic.
-
-For the full checklist for adding a new run, new PyTorch backbone, new
-visualization model family, or TensorFlow support, see
-`advanced_visualization/handoff_docs/01_autotorch_model_integration_guide.md`.
+Add bind mounts for any configured image/artifact paths outside the repository.

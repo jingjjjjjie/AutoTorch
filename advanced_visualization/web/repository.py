@@ -1,7 +1,9 @@
 """Source discovery and modification-aware dataframe caching."""
+
 from __future__ import annotations
 
 import hashlib
+import re
 import threading
 from collections import OrderedDict
 from dataclasses import dataclass
@@ -15,14 +17,13 @@ from advanced_visualization.core.columns import (
     image_path_columns,
     infer_standard_columns,
 )
+from advanced_visualization.core.feature_data import FEATURE_PATTERN
+from advanced_visualization.core.images import valid_image
 from advanced_visualization.core.settings import configured_path, load_settings
 
 
-FEATURE_PATTERN = __import__("re").compile(
-    r"(?:^|_)(feature|feat|embedding|emb)[_-]?\d+$", __import__("re").IGNORECASE
-)
-EXPLANATION_PATTERN = __import__("re").compile(
-    r"(grad.?cam|heatmap|overlay|layer_montage)", __import__("re").IGNORECASE
+EXPLANATION_PATTERN = re.compile(
+    r"(grad.?cam|heatmap|overlay|layer_montage)", re.IGNORECASE
 )
 
 
@@ -46,7 +47,9 @@ class DatasetRepository:
     def __init__(self, max_cached_sources: int = 4) -> None:
         self._max_cached_sources = max_cached_sources
         self._cache: OrderedDict[str, tuple[int, int, pd.DataFrame]] = OrderedDict()
-        self._review_cache: OrderedDict[str, tuple[int, int, pd.DataFrame]] = OrderedDict()
+        self._review_cache: OrderedDict[str, tuple[int, int, pd.DataFrame]] = (
+            OrderedDict()
+        )
         self._schema_cache: dict[str, tuple[int, int, int, dict]] = {}
         self._lock = threading.RLock()
 
@@ -54,7 +57,7 @@ class DatasetRepository:
         result = []
         seen: set[Path] = set()
         for raw in available_data_sources():
-            path = Path(raw["path"]).expanduser()
+            path = Path(str(raw["path"])).expanduser()
             model_key = str(raw.get("model_key") or "")
             artifact = raw.get("artifact_dir")
             result.append(
@@ -63,7 +66,7 @@ class DatasetRepository:
                     label=str(raw["label"]),
                     path=path,
                     model_key=model_key,
-                    artifact_dir=Path(artifact).expanduser() if artifact else None,
+                    artifact_dir=Path(str(artifact)).expanduser() if artifact else None,
                 )
             )
             seen.add(path.resolve())
@@ -79,7 +82,11 @@ class DatasetRepository:
                     label=f"{model.key} - features",
                     path=path,
                     model_key=model.key,
-                    artifact_dir=configured_path(model.artifact_dir) if model.artifact_dir else None,
+                    artifact_dir=(
+                        configured_path(model.artifact_dir)
+                        if model.artifact_dir
+                        else None
+                    ),
                 )
             )
             seen.add(path.resolve())
@@ -107,7 +114,9 @@ class DatasetRepository:
                 return cached[2]
 
         header = pd.read_csv(source.path, nrows=0).columns.astype(str)
-        feature_dtypes = {column: np.float32 for column in header if FEATURE_PATTERN.search(column)}
+        feature_dtypes = {
+            column: np.float32 for column in header if FEATURE_PATTERN.search(column)
+        }
         frame = pd.read_csv(source.path, low_memory=False, dtype=feature_dtypes)
         frame.columns = frame.columns.astype(str)
         if "__row_id" in frame.columns:
@@ -132,7 +141,9 @@ class DatasetRepository:
                 return cached[2]
 
         header = pd.read_csv(source.path, nrows=0).columns.astype(str).tolist()
-        review_columns = [column for column in header if not FEATURE_PATTERN.search(column)]
+        review_columns = [
+            column for column in header if not FEATURE_PATTERN.search(column)
+        ]
         frame = pd.read_csv(source.path, usecols=review_columns, low_memory=False)
         frame.columns = frame.columns.astype(str)
         if "__row_id" in frame.columns:
@@ -165,20 +176,38 @@ class DatasetRepository:
         public = frame.drop(columns="__row_id")
         columns = public.columns.tolist()
         settings = load_settings()
-        model = next((item for item in settings.models if item.key == source.model_key), None)
-        defaults = infer_standard_columns(public, model.prediction_column if model else "")
+        model = next(
+            (item for item in settings.models if item.key == source.model_key), None
+        )
+        defaults = infer_standard_columns(
+            public, model.prediction_column if model else ""
+        )
         categorical = self._categorical_columns(public, features=set())
         images = image_path_columns(public)
-        availability = {column: self._path_availability(public[column]) for column in images}
-        images.sort(key=lambda column: (availability[column] <= 0, -availability[column], column))
+        availability = {
+            column: self._path_availability(public[column]) for column in images
+        }
+        images.sort(
+            key=lambda column: (
+                availability[column] <= 0,
+                -availability[column],
+                column,
+            )
+        )
         gradcams = [column for column in images if EXPLANATION_PATTERN.search(column)]
-        configured_image = model.image_column if model and model.image_column in images else ""
+        configured_image = (
+            model.image_column if model and model.image_column in images else ""
+        )
         inferred_image = defaults.get("image_column", "")
         if configured_image and availability.get(configured_image, 0) > 0:
             defaults["image_column"] = configured_image
         elif availability.get(inferred_image, 0) <= 0:
             defaults["image_column"] = next(
-                (column for column in images if availability[column] > 0 and column not in gradcams),
+                (
+                    column
+                    for column in images
+                    if availability[column] > 0 and column not in gradcams
+                ),
                 next((column for column in images if availability[column] > 0), ""),
             )
         header = pd.read_csv(source.path, nrows=0).columns.astype(str).tolist()
@@ -201,7 +230,9 @@ class DatasetRepository:
         details = {
             "source": source,
             "columns": columns,
-            "numeric_columns": public.select_dtypes(include=[np.number]).columns.tolist(),
+            "numeric_columns": public.select_dtypes(
+                include=[np.number]
+            ).columns.tolist(),
             "categorical_columns": categorical,
             "image_columns": images,
             "gradcam_columns": gradcams,
@@ -210,7 +241,8 @@ class DatasetRepository:
             "categories": categories,
             "image_availability": availability,
             "default_filter_columns": [
-                column for column in settings.review.get("default_filter_columns", [])
+                column
+                for column in settings.review.get("default_filter_columns", [])
                 if column in categories
             ],
             "prepared_gradcam_methods": prepared_methods,
@@ -226,7 +258,7 @@ class DatasetRepository:
         values = values[values.str.strip().ne("")].head(sample_size)
         if values.empty:
             return 0.0
-        existing = sum(Path(value).expanduser().is_file() for value in values)
+        existing = sum(valid_image(value) is not None for value in values)
         return existing / len(values)
 
     @staticmethod

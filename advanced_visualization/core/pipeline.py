@@ -1,15 +1,17 @@
 """Single unified preparation pipeline for visualization artifacts."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from types import SimpleNamespace
 
-from advanced_visualization.cli.pregenerate_gradcam import pregenerate_csv
-from advanced_visualization.cli.preparation import prepare_artifact
 from advanced_visualization.core.artifacts import load_manifest
 from advanced_visualization.core.config import all_model_runs
-from advanced_visualization.core.feature_extraction import extract_features_and_predictions
+from advanced_visualization.core.gradcam_generation import (
+    GradcamGenerationOptions,
+    pregenerate_csv,
+)
+from advanced_visualization.core.preparation import prepare_artifact
 from advanced_visualization.core.settings import load_settings
 
 
@@ -76,7 +78,13 @@ def prepare_model_artifact(
     image_column = manifest.image_column if manifest else ""
     if options.extract_features:
         if not image_column:
-            raise ValueError(f"Cannot extract features for {model_key}: no image column inferred.")
+            raise ValueError(
+                f"Cannot extract features for {model_key}: no image column inferred."
+            )
+        from advanced_visualization.core.feature_extraction import (
+            extract_features_and_predictions,
+        )
+
         extract_features_and_predictions(
             config=config,
             csv_path=prepared_csv,
@@ -90,13 +98,14 @@ def prepare_model_artifact(
     if options.generate_gradcam:
         generated, skipped, failed = pregenerate_csv(
             prepared_csv,
-            _gradcam_args(
+            GradcamGenerationOptions(
                 image_column=image_column or None,
                 batch_size=options.gradcam_batch_size,
                 num_workers=options.num_workers,
                 save_workers=options.save_workers,
                 only_missing=options.only_missing_gradcam,
                 cam_methods=options.cam_methods,
+                cam_targets=("fraud",),
                 limit=options.limit,
             ),
         )
@@ -107,34 +116,4 @@ def prepare_model_artifact(
         generated_gradcam=generated,
         skipped_gradcam=skipped,
         failed_gradcam=failed,
-    )
-
-
-def _gradcam_args(
-    *,
-    image_column: str | None,
-    batch_size: int,
-    num_workers: int,
-    save_workers: int,
-    only_missing: bool,
-    cam_methods: tuple[str, ...],
-    limit: int | None,
-) -> SimpleNamespace:
-    return SimpleNamespace(
-        image_column=image_column,
-        filter=[],
-        offset=0,
-        limit=limit,
-        num_shards=1,
-        shard_index=0,
-        batch_size=batch_size,
-        num_workers=num_workers,
-        prefetch_factor=4,
-        save_workers=save_workers,
-        output_root=None,
-        cam_method=list(cam_methods),
-        max_error_examples=10,
-        only_missing=only_missing,
-        dry_run=False,
-        stop_on_error=False,
     )

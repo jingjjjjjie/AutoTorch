@@ -1,4 +1,5 @@
 """Forward-pass feature extraction for prepared visualization CSVs."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -53,9 +54,9 @@ def extract_features_and_predictions(
         raise ValueError(f"Missing image column {image_column!r} in {csv_path}")
 
     bundle = load_gradcam_bundle(config.key)
-    model = bundle["model"]
-    transform = bundle["transform"]
-    device = bundle["device"]
+    model = bundle.model
+    transform = bundle.transform
+    device = bundle.device
     dataset = ImageCsvDataset(df, image_column=image_column, transform=transform)
     loader = DataLoader(
         dataset,
@@ -67,7 +68,9 @@ def extract_features_and_predictions(
 
     features, predictions = _batched_features(model, loader, device)
     feature_df = build_feature_frame(features)
-    existing_feature_columns = [column for column in df.columns if str(column).startswith(FEATURE_PREFIX)]
+    existing_feature_columns = [
+        column for column in df.columns if str(column).startswith(FEATURE_PREFIX)
+    ]
     if existing_feature_columns:
         df = df.drop(columns=existing_feature_columns)
 
@@ -98,12 +101,19 @@ def _batched_features(
             batch_outputs = model.mlp_head(batch_features_tensor).squeeze(1)
             batch_probs = _probabilities(batch_outputs)
             batch_features = batch_features_tensor.detach().cpu().numpy()
-            for row_index, feature, probability in zip(indexes.tolist(), batch_features, batch_probs.detach().cpu().tolist()):
+            for row_index, feature, probability in zip(
+                indexes.tolist(), batch_features, batch_probs.detach().cpu().tolist()
+            ):
                 features_by_index[row_index] = feature.astype(np.float32, copy=False)
                 predictions_by_index[row_index] = float(probability)
 
-    features = np.stack([features_by_index[index] for index in range(len(loader.dataset))])
-    predictions = np.array([predictions_by_index[index] for index in range(len(loader.dataset))], dtype=np.float32)
+    features = np.stack(
+        [features_by_index[index] for index in range(len(loader.dataset))]
+    )
+    predictions = np.array(
+        [predictions_by_index[index] for index in range(len(loader.dataset))],
+        dtype=np.float32,
+    )
     return features, predictions
 
 

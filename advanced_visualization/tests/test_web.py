@@ -9,6 +9,7 @@ import pytest
 
 from advanced_visualization.core.gradcam_cache import gradcam_cache_candidates, gradcam_file_index
 from advanced_visualization.core.heatmap import jet_overlay
+from advanced_visualization.core.images import image_cache_digest
 from advanced_visualization.web.filtering import filter_frame, page_frame
 from advanced_visualization.web.images import image_bytes
 from advanced_visualization.web.models import FilterRequest, ProjectionRequest
@@ -69,6 +70,16 @@ def test_jet_overlay_maps_low_to_blue_and_high_to_red() -> None:
 
     assert overlay[0, 0, 2] > overlay[0, 0, 0]
     assert overlay[0, 1, 0] > overlay[0, 1, 2]
+
+
+def test_image_cache_digest_changes_when_image_changes(tmp_path: Path) -> None:
+    image_path = tmp_path / "image.jpg"
+    image_path.write_bytes(b"first")
+    first = image_cache_digest(image_path)
+
+    image_path.write_bytes(b"a different image payload")
+
+    assert image_cache_digest(image_path) != first
 
 
 @pytest.mark.parametrize(
@@ -186,6 +197,23 @@ def test_schema_prefers_available_image_and_detects_montage(tmp_path: Path) -> N
     assert schema["gradcam_columns"] == ["tf_crop_layer_montage_path"]
     assert schema["image_availability"]["ori_path"] == 0.0
     assert repository.schema("source") is schema
+
+
+def test_schema_cache_invalidates_when_gradcam_artifacts_change(tmp_path: Path) -> None:
+    csv_path = tmp_path / "prepared.csv"
+    artifact_dir = tmp_path / "artifacts"
+    gradcam_dir = artifact_dir / "gradcam"
+    gradcam_dir.mkdir(parents=True)
+    pd.DataFrame({"id": ["one"], "label": [0], "score": [0.1]}).to_csv(csv_path, index=False)
+    repository = FixedRepository(DataSource("source", "Source", csv_path, "unknown", artifact_dir))
+
+    initial = repository.schema("source")
+    (gradcam_dir / "one_gradcam_logit.png").write_bytes(b"prepared")
+    refreshed = repository.schema("source")
+
+    assert initial["prepared_gradcam_methods"] == []
+    assert refreshed["prepared_gradcam_methods"] == ["gradcam"]
+    assert refreshed is not initial
 
 
 def test_projection_returns_finite_points() -> None:

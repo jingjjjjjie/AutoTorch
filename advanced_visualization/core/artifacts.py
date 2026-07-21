@@ -118,7 +118,7 @@ def build_manifest(
 def default_csv_paths() -> list[Path]:
     configured_paths = []
     for _model_key, artifact_dir, prediction_csv in configured_model_sources():
-        if artifact_dir:
+        if artifact_dir is not None:
             manifest = load_manifest(artifact_dir)
             if manifest and manifest.prepared_csv.exists():
                 configured_paths.append(manifest.prepared_csv)
@@ -127,7 +127,7 @@ def default_csv_paths() -> list[Path]:
             if prepared_csv.exists():
                 configured_paths.append(prepared_csv)
                 continue
-        if prediction_csv.exists():
+        if prediction_csv is not None and prediction_csv.is_file():
             configured_paths.append(prediction_csv)
     if configured_paths:
         return list(dict.fromkeys(configured_paths))
@@ -151,17 +151,17 @@ def available_data_sources() -> list[dict[str, object]]:
 
     for model_key, artifact_dir, prediction_csv in configured_model_sources():
         label = model_key
-        manifest = load_manifest(artifact_dir)
+        manifest = load_manifest(artifact_dir) if artifact_dir is not None else None
         if manifest and manifest.prepared_csv.exists():
             append_prepared(f"{label} - prepared", manifest.prepared_csv, artifact_dir, model_key)
             continue
 
-        prepared_csv = prepared_csv_path(artifact_dir)
-        if prepared_csv.exists():
+        prepared_csv = prepared_csv_path(artifact_dir) if artifact_dir is not None else None
+        if prepared_csv is not None and prepared_csv.is_file():
             append_prepared(f"{label} - prepared", prepared_csv, artifact_dir, model_key)
             continue
 
-        if prediction_csv.exists():
+        if prediction_csv is not None and prediction_csv.is_file():
             added_model_source = True
             sources.append(
                 {

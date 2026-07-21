@@ -101,16 +101,16 @@ def _alternate_cache_paths(path: Path) -> list[Path]:
     return paths
 
 
-@lru_cache(maxsize=500_000)
 def _cached_image_cache_digest(raw_path: str) -> Optional[str]:
     image_path = Path(raw_path).expanduser()
     if not image_path.is_file() or image_path.suffix.lower() not in IMAGE_EXTENSIONS:
         return None
     resolved = image_path.expanduser().resolve()
     try:
-        stamp = f"{resolved}:{resolved.stat().st_mtime_ns}"
+        stat = resolved.stat()
     except OSError:
         return None
+    stamp = f"{resolved}:{stat.st_mtime_ns}:{stat.st_size}"
     return hashlib.sha1(stamp.encode("utf-8")).hexdigest()[:18]
 
 

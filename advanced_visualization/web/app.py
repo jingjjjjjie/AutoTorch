@@ -1,22 +1,24 @@
 """FastAPI entrypoint for the non-Streamlit visualization app."""
 from __future__ import annotations
 
-import math
 from pathlib import Path
-from typing import Any
-from urllib.parse import quote
 
-import numpy as np
-import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from advanced_visualization.core.gradcam_cache import gradcam_cache_candidates
-from advanced_visualization.core.images import valid_image
+from advanced_visualization.web.analysis import analysis_page
+from advanced_visualization.web.artifacts import (
+    image_url as _image_url,
+    prepared_gradcam_path as _prepared_gradcam_path,
+    prepared_gradcam_url as _prepared_gradcam_url,
+)
+from advanced_visualization.web.comparisons import comparison_page
 from advanced_visualization.web.filtering import filter_frame, page_frame
 from advanced_visualization.web.images import image_bytes
 from advanced_visualization.web.models import (
+    AnalysisRequest,
+    ComparisonRequest,
     FilterRequest,
     PageResponse,
     ProjectionRequest,
@@ -25,6 +27,7 @@ from advanced_visualization.web.models import (
 )
 from advanced_visualization.web.projections import projection_service
 from advanced_visualization.web.repository import DataSource, repository
+from advanced_visualization.web.serialization import json_value as _json_value
 
 
 STATIC_DIR = Path(__file__).with_name("static")
@@ -36,27 +39,6 @@ def _source_summary(source: DataSource, rows: int | None = None) -> SourceSummar
         id=source.id, label=source.label, model_key=source.model_key,
         path=str(source.path), rows=rows, available=source.path.is_file(),
     )
-
-
-def _json_value(value: Any) -> str | int | float | bool | None:
-    if value is None or (not isinstance(value, (list, dict)) and pd.isna(value)):
-        return None
-    if isinstance(value, (np.integer,)):
-        return int(value)
-    if isinstance(value, (np.floating, float)):
-        number = float(value)
-        return number if math.isfinite(number) else None
-    if isinstance(value, (bool, np.bool_)):
-        return bool(value)
-    if isinstance(value, int):
-        return value
-    return str(value)
-
-
-def _image_url(source_id: str, row_id: int, column: str, max_side: int = 480) -> str:
-    if not column:
-        return ""
-    return f"/api/images/{source_id}/{row_id}?column={quote(column, safe='')}&max_side={max_side}"
 
 
 @app.get("/api/health")
@@ -149,33 +131,24 @@ def projection(request: ProjectionRequest) -> dict:
     return result
 
 
-def _prepared_gradcam_path(
-    source: DataSource,
-    row: pd.Series,
-    image_column: str,
-    method: str,
-    target: str = "fraud",
-) -> Path | None:
-    if not source.artifact_dir or image_column not in row.index:
-        return None
-    image_path = valid_image(row[image_column])
-    if image_path is None:
-        return None
-    for candidate in gradcam_cache_candidates(
-        source.artifact_dir / "gradcam", image_path, method=method, target=target
-    ):
-        if candidate.is_file():
-            return candidate
-    return None
+@app.post("/api/comparison")
+def comparison(request: ComparisonRequest) -> dict:
+    try:
+        return comparison_page(repository, request)
+    except (KeyError, FileNotFoundError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-def _prepared_gradcam_url(
-    source_id: str, row_id: int, image_column: str, method: str, target: str = "fraud"
-) -> str:
-    return (
-        f"/api/gradcam/{source_id}/{row_id}?image_column={quote(image_column, safe='')}"
-        f"&method={quote(method, safe='')}&target={quote(target, safe='')}"
-    )
+@app.post("/api/analysis")
+def analysis(request: AnalysisRequest) -> dict:
+    try:
+        return analysis_page(repository, request)
+    except (KeyError, FileNotFoundError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.get("/api/points/{source_id}/{row_id}")

@@ -69,9 +69,9 @@ def render_summary(source: pd.DataFrame, filtered: pd.DataFrame, controls: dict)
     metric_cols[4].metric("Low-conf failures", f"{int((filtered['__is_failure'] & filtered['__confidence'].le(controls['low_conf'])).sum()):,}")
     metric_cols[5].metric("Prepared Grad-CAM", f"{prepared_gradcam:,}" if prepared_gradcam is not None else "visible")
 
-def page_bounds(total: int, page_size: int) -> tuple[int, int, int]:
+def page_bounds(total: int, page_size: int, state_namespace: str = "advanced_visualization") -> tuple[int, int, int, int]:
     total_pages = max(1, int(np.ceil(total / page_size)))
-    page_key = "advanced_visualization_page"
+    page_key = f"{state_namespace}_page"
     current = int(st.session_state.get(page_key, 1))
     current = min(max(1, current), total_pages)
     st.session_state[page_key] = current
@@ -79,28 +79,28 @@ def page_bounds(total: int, page_size: int) -> tuple[int, int, int]:
     end = min(start + page_size, total)
     return current, total_pages, start, end
 
-def render_pager(total: int, page_size: int) -> tuple[int, int]:
-    current, total_pages, start, end = page_bounds(total, page_size)
+def render_pager(total: int, page_size: int, state_namespace: str = "advanced_visualization") -> tuple[int, int]:
+    current, total_pages, start, end = page_bounds(total, page_size, state_namespace)
     left, middle, right = st.columns([0.18, 0.64, 0.18])
     with left:
-        if st.button("Previous", disabled=current <= 1, use_container_width=True):
-            st.session_state["advanced_visualization_page"] = current - 1
+        if st.button("Previous", disabled=current <= 1, use_container_width=True, key=f"{state_namespace}_previous"):
+            st.session_state[f"{state_namespace}_page"] = current - 1
             st.rerun()
     with middle:
-        selected = st.number_input("Page", min_value=1, max_value=total_pages, value=current, step=1)
+        selected = st.number_input("Page", min_value=1, max_value=total_pages, value=current, step=1, key=f"{state_namespace}_page_input")
         if selected != current:
-            st.session_state["advanced_visualization_page"] = int(selected)
+            st.session_state[f"{state_namespace}_page"] = int(selected)
             st.rerun()
         st.caption(f"Showing {start + 1 if total else 0:,}-{end:,} of {total:,}")
     with right:
-        if st.button("Next", disabled=current >= total_pages, use_container_width=True):
-            st.session_state["advanced_visualization_page"] = current + 1
+        if st.button("Next", disabled=current >= total_pages, use_container_width=True, key=f"{state_namespace}_next"):
+            st.session_state[f"{state_namespace}_page"] = current + 1
             st.rerun()
     return start, end
 
-def visible_count(total: int, batch_size: int) -> int:
-    key = "advanced_visualization_visible_count"
-    version_key = "advanced_visualization_loader_version"
+def visible_count(total: int, batch_size: int, state_namespace: str = "advanced_visualization") -> int:
+    key = f"{state_namespace}_visible_count"
+    version_key = f"{state_namespace}_loader_version"
     loader_version = "stable_manual_20260710"
     if st.session_state.get(version_key) != loader_version:
         st.session_state[version_key] = loader_version
@@ -112,21 +112,21 @@ def visible_count(total: int, batch_size: int) -> int:
     st.session_state[key] = current
     return min(current, total)
 
-def render_bottomless_controls(total: int, batch_size: int) -> int:
-    count = visible_count(total, batch_size)
+def render_bottomless_controls(total: int, batch_size: int, state_namespace: str = "advanced_visualization") -> int:
+    count = visible_count(total, batch_size, state_namespace)
     st.caption(f"Showing 1-{count:,} of {total:,}")
     return count
 
-def render_load_more(total: int, batch_size: int) -> None:
-    count = visible_count(total, batch_size)
+def render_load_more(total: int, batch_size: int, state_namespace: str = "advanced_visualization") -> None:
+    count = visible_count(total, batch_size, state_namespace)
     if count >= total:
         st.caption(f"All {total:,} rows shown.")
         return
 
     left, middle, right = st.columns([0.25, 0.50, 0.25])
     with middle:
-        if st.button("Load more", use_container_width=True, key="advanced_visualization_load_more"):
-            st.session_state["advanced_visualization_visible_count"] = min(total, count + batch_size)
+        if st.button("Load more", use_container_width=True, key=f"{state_namespace}_load_more"):
+            st.session_state[f"{state_namespace}_visible_count"] = min(total, count + batch_size)
             st.rerun()
         st.caption(f"Showing {count:,} of {total:,}")
 

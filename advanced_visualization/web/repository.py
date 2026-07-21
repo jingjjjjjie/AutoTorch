@@ -47,7 +47,7 @@ class DatasetRepository:
         self._max_cached_sources = max_cached_sources
         self._cache: OrderedDict[str, tuple[int, int, pd.DataFrame]] = OrderedDict()
         self._review_cache: OrderedDict[str, tuple[int, int, pd.DataFrame]] = OrderedDict()
-        self._schema_cache: dict[str, tuple[int, int, dict]] = {}
+        self._schema_cache: dict[str, tuple[int, int, int, dict]] = {}
         self._lock = threading.RLock()
 
     def sources(self) -> list[DataSource]:
@@ -150,11 +150,17 @@ class DatasetRepository:
         source = self.source(source_id)
         frame = self.review_dataframe(source_id)
         stat = source.path.stat()
-        signature = (stat.st_mtime_ns, stat.st_size)
+        gradcam_root = source.artifact_dir / "gradcam" if source.artifact_dir else None
+        artifact_modified_ns = (
+            gradcam_root.stat().st_mtime_ns
+            if gradcam_root and gradcam_root.is_dir()
+            else 0
+        )
+        signature = (stat.st_mtime_ns, stat.st_size, artifact_modified_ns)
         with self._lock:
             cached = self._schema_cache.get(source_id)
-            if cached and cached[:2] == signature:
-                return cached[2]
+            if cached and cached[:3] == signature:
+                return cached[3]
 
         public = frame.drop(columns="__row_id")
         columns = public.columns.tolist()
@@ -183,7 +189,6 @@ class DatasetRepository:
             if len(values) <= 200:
                 categories[column] = sorted(values.tolist())
         prepared_methods: list[str] = []
-        gradcam_root = source.artifact_dir / "gradcam" if source.artifact_dir else None
         if gradcam_root and gradcam_root.is_dir():
             for path in gradcam_root.glob("*.png"):
                 name = path.name.lower()

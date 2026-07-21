@@ -21,6 +21,8 @@
       <nav class="tabs" aria-label="Views">
         <button class="tab active" data-view="review">Image review</button>
         <button class="tab" data-view="features">Feature space</button>
+        <button class="tab" data-view="comparison">Compare models</button>
+        <button class="tab" data-view="analysis">Results analysis</button>
       </nav>
 
       <section class="dataset-filters">
@@ -115,6 +117,96 @@
         </div>
         <button class="primary" type="submit">Run projection</button>
       </form>
+
+      <form id="comparison-controls" class="control-stack hidden">
+        <section>
+          <h2>Experiments</h2>
+          <label class="field"><span>Experiment A</span><select id="comparison-source-a"></select></label>
+          <label class="field"><span>Experiment B</span><select id="comparison-source-b"></select></label>
+          <div class="split-actions">
+            <button id="open-viewer-a" class="quiet-button" type="button">Open A viewer</button>
+            <button id="open-viewer-b" class="quiet-button" type="button">Open B viewer</button>
+          </div>
+          <p class="field-help">Viewers open independently, so each model keeps its own filters and page.</p>
+        </section>
+        <section>
+          <h2>Alignment</h2>
+          <label class="field"><span>A item ID</span><select id="comparison-item-a"></select></label>
+          <label class="field"><span>B item ID</span><select id="comparison-item-b"></select></label>
+          <label class="field"><span>A truth</span><select id="comparison-truth-a"></select></label>
+          <label class="field"><span>B truth</span><select id="comparison-truth-b"></select></label>
+          <label class="field"><span>A prediction</span><select id="comparison-prediction-a"></select></label>
+          <label class="field"><span>B prediction</span><select id="comparison-prediction-b"></select></label>
+          <div class="two-fields">
+            <label class="field"><span>A threshold</span><input id="comparison-threshold-a" type="number" min="0" max="1" step="0.01" value="0.5"></label>
+            <label class="field"><span>B threshold</span><input id="comparison-threshold-b" type="number" min="0" max="1" step="0.01" value="0.5"></label>
+          </div>
+        </section>
+        <section>
+          <h2>Images</h2>
+          <label class="field"><span>A image</span><select id="comparison-image-a"></select></label>
+          <label class="field"><span>B image</span><select id="comparison-image-b"></select></label>
+          <label class="field"><span>A Grad-CAM</span><select id="comparison-gradcam-a"></select></label>
+          <label class="field"><span>B Grad-CAM</span><select id="comparison-gradcam-b"></select></label>
+          <label class="field"><span>CAM method</span><select id="comparison-gradcam-method"><option value="gradcam">Grad-CAM</option><option value="gradcam++">Grad-CAM++</option></select></label>
+          <label class="field"><span>CAM target</span><select id="comparison-gradcam-target"><option value="fraud">Fraud evidence</option><option value="genuine">Genuine evidence</option></select></label>
+        </section>
+        <section>
+          <h2>Metadata and filters</h2>
+          <label class="field"><span>Subclass</span><select id="comparison-subclass"></select></label>
+          <label class="field"><span>Identity</span><select id="comparison-identity"></select></label>
+          <label class="field"><span>Quality</span><select id="comparison-quality"></select></label>
+          <p class="field-help">Dataset filters above are applied when Experiment A is the selected data source.</p>
+          <label class="field"><span>Outcome</span><select id="comparison-outcome">
+            <option value="">All outcomes</option><option value="a_only_correct">A only correct</option>
+            <option value="b_only_correct">B only correct</option><option value="both_correct">Both correct</option>
+            <option value="both_wrong">Both wrong</option><option value="truth_mismatch">Truth mismatch</option>
+            <option value="unscored">Unscored</option><option value="only_in_a">Only in A</option><option value="only_in_b">Only in B</option>
+          </select></label>
+          <label class="field"><span>Search ID</span><input id="comparison-search" type="search" placeholder="Stable sample ID"></label>
+          <label class="field"><span>Sort</span><select id="comparison-sort">
+            <option value="true_confidence_delta_desc">A advantage descending</option><option value="true_confidence_delta_asc">B advantage descending</option>
+            <option value="score_delta_desc">Score delta descending</option><option value="score_delta_asc">Score delta ascending</option><option value="item_id">Item ID</option>
+          </select></label>
+          <label class="field"><span>Page size</span><select id="comparison-page-size"><option>12</option><option selected>24</option><option>48</option><option>96</option></select></label>
+        </section>
+        <button class="primary" type="submit">Compare experiments</button>
+      </form>
+
+      <form id="analysis-controls" class="control-stack hidden">
+        <section>
+          <h2>Notebook dataset</h2>
+          <label class="field"><span>Data source</span><select id="analysis-source"></select></label>
+          <label class="field"><span>Item ID</span><select id="analysis-item"></select></label>
+          <label class="field"><span>Truth</span><select id="analysis-truth"></select></label>
+          <label class="field"><span>Original prediction</span><select id="analysis-ori-prediction"></select></label>
+          <label class="field"><span>Crop prediction</span><select id="analysis-crop-prediction"></select></label>
+          <label class="field"><span>Original image</span><select id="analysis-original-image"></select></label>
+          <label class="field"><span>Crop image</span><select id="analysis-crop-image"></select></label>
+        </section>
+        <section>
+          <h2>Notebook cleanup</h2>
+          <label class="field"><span>Subclass</span><select id="analysis-subclass"></select></label>
+          <label class="field"><span>Data identity</span><select id="analysis-identity"></select></label>
+          <label class="field"><span>Quality issue</span><select id="analysis-quality"></select></label>
+          <label class="field"><span>Quality rows</span><select id="analysis-quality-mode"><option value="known" selected>Known quality only</option><option value="high_quality">High quality only</option><option value="quality_issue">Quality issues only</option><option value="all">All rows</option></select></label>
+          <label class="check"><input id="analysis-exclude-unknown" type="checkbox" checked><span>Exclude Unknown subclass</span></label>
+          <label class="field"><span>Exclude identities</span><select id="analysis-excluded-identities" multiple></select></label>
+        </section>
+        <section>
+          <h2>Evaluation</h2>
+          <label class="field"><span>Threshold</span><input id="analysis-threshold" type="number" min="0" max="1" step="0.01" value="0.01"></label>
+          <label class="field"><span>Rows to visualize</span><select id="analysis-outcome">
+            <option value="all">All rows</option><option value="ori_wrong">Original wrong</option><option value="crop_wrong">Crop wrong</option><option value="merged_wrong">Merged wrong</option>
+            <option value="ori_only_correct">Original only correct</option><option value="crop_only_correct">Crop only correct</option>
+            <option value="merged_fixes_both">Merged fixes both</option><option value="merged_regression">Merged regression</option><option value="ori_crop_disagree">Original/crop disagree</option>
+          </select></label>
+          <label class="field"><span>Search ID</span><input id="analysis-search" type="search" placeholder="UUID"></label>
+          <label class="field"><span>Sort</span><select id="analysis-sort"><option value="merged_confidence_desc">Merged confidence descending</option><option value="ori_crop_delta_desc">Original advantage</option><option value="ori_crop_delta_asc">Crop advantage</option><option value="item_id">Item ID</option></select></label>
+          <label class="field"><span>Page size</span><select id="analysis-page-size"><option>12</option><option selected>24</option><option>48</option><option>96</option></select></label>
+        </section>
+        <button class="primary" type="submit">Analyze predictions</button>
+      </form>
     </aside>
 
     <section class="workspace">
@@ -147,6 +239,22 @@
           <button id="legend-hide-all" type="button">Hide all</button>
         </div>
         <div id="legend" class="legend"></div>
+      </div>
+
+      <div id="comparison-view" class="hidden">
+        <div id="comparison-metrics" class="metrics"></div>
+        <div class="workspace-heading"><div><h1>Model comparison</h1><p id="comparison-summary">Align two experiments by stable sample ID.</p></div></div>
+        <div id="comparison-matrix" class="outcome-matrix"></div>
+        <div id="comparison-gallery" class="comparison-gallery"></div>
+        <div class="pager"><button id="comparison-previous" type="button">Previous</button><span id="comparison-page-label"></span><button id="comparison-next" type="button">Next</button></div>
+      </div>
+
+      <div id="analysis-view" class="hidden">
+        <div id="analysis-metrics" class="metrics"></div>
+        <div class="workspace-heading"><div><h1>Results analysis</h1><p id="analysis-summary">Notebook-equivalent original, crop, and merged evaluation.</p></div><button id="analysis-clear-drilldown" class="quiet-button hidden" type="button">Clear breakdown selection</button></div>
+        <div id="analysis-breakdowns" class="breakdown-grid"></div>
+        <div id="analysis-gallery" class="analysis-gallery"></div>
+        <div class="pager"><button id="analysis-previous" type="button">Previous</button><span id="analysis-page-label"></span><button id="analysis-next" type="button">Next</button></div>
       </div>
       <div id="loading" class="loading hidden"><span></span>Loading</div>
     </section>

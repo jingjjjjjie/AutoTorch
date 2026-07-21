@@ -54,6 +54,7 @@ def _model_from_editor_row(row: dict) -> UserModelConfig:
         image_size=int(row.get("image_size") or 0),
         image_column=str(row.get("image_column", "")).strip(),
         prediction_column=str(row.get("prediction_column", "")).strip(),
+        review_preset=dict(row.get("review_preset") or {}),
         enabled=bool(row.get("enabled", True)),
     )
 
@@ -110,6 +111,7 @@ def _render_model_editor(settings: UserSettings) -> list[UserModelConfig]:
         key="advanced_visualization_settings_model_generation",
     )
 
+    existing_by_key = {model.key: model.to_dict() for model in settings.models if model.key}
     generation_by_key = {
         str(row.get("key", "")).strip(): row
         for row in generation_edited.to_dict("records")
@@ -120,7 +122,7 @@ def _render_model_editor(settings: UserSettings) -> list[UserModelConfig]:
     for source_row in source_edited.to_dict("records"):
         key = str(source_row.get("key", "")).strip()
         source_keys.add(key)
-        row = {**source_row, **generation_by_key.get(key, {})}
+        row = {**existing_by_key.get(key, {}), **source_row, **generation_by_key.get(key, {})}
         model = _model_from_editor_row(row)
         if model.key or model.artifact_dir or model.checkpoint or model.prediction_column:
             models.append(model)
@@ -128,7 +130,7 @@ def _render_model_editor(settings: UserSettings) -> list[UserModelConfig]:
     for key, generation_row in generation_by_key.items():
         if key in source_keys:
             continue
-        model = _model_from_editor_row(generation_row)
+        model = _model_from_editor_row({**existing_by_key.get(key, {}), **generation_row})
         if model.key or model.checkpoint:
             models.append(model)
     return models

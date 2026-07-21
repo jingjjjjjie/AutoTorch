@@ -15,6 +15,8 @@ export const getSources = () => api("/api/sources");
 export const getSchema = sourceId => api(`/api/sources/${sourceId}/schema`);
 export const getReview = payload => api("/api/review", { method: "POST", body: JSON.stringify(payload) });
 export const getProjection = payload => api("/api/projection", { method: "POST", body: JSON.stringify(payload) });
+export const getComparison = payload => api("/api/comparison", { method: "POST", body: JSON.stringify(payload) });
+export const getAnalysis = payload => api("/api/analysis", { method: "POST", body: JSON.stringify(payload) });
 export const getPoint = (sourceId, rowId, params) => {
   const query = new URLSearchParams(params);
   return api(`/api/points/${sourceId}/${rowId}?${query}`);

@@ -490,9 +490,9 @@ def render(df: pd.DataFrame, source: dict, config: dict) -> None:
         return
 
     if controls["browse_mode"] == "Bottomless scroll":
-        visible = render_bottomless_controls(len(filtered), controls["page_size"])
+        visible = render_bottomless_controls(len(filtered), controls["page_size"], "layered_gradcam")
         render_grid(filtered.iloc[:visible], controls, start_index=1)
-        render_load_more(len(filtered), controls["page_size"])
+        render_load_more(len(filtered), controls["page_size"], "layered_gradcam")
     else:
-        start, end = render_pager(len(filtered), controls["page_size"])
+        start, end = render_pager(len(filtered), controls["page_size"], "layered_gradcam")
         render_grid(filtered.iloc[start:end], controls, start_index=start + 1)

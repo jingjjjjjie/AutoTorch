@@ -3,9 +3,9 @@ from __future__ import annotations
 
 import math
 
-import numpy as np
 import pandas as pd
 
+from advanced_visualization.core.evaluation import attach_binary_evaluation, evaluate_binary
 from advanced_visualization.web.models import FilterRequest
 
 
@@ -21,40 +21,12 @@ def _known_column(frame: pd.DataFrame, value: str) -> str | None:
 
 
 def enrich_failures(frame: pd.DataFrame, request: FilterRequest) -> pd.DataFrame:
-    result = frame.copy()
-    truth_column = _known_column(result, request.truth_column)
-    prediction_column = _known_column(result, request.prediction_column)
-    if not truth_column or not prediction_column:
-        result["__has_eval"] = False
-        result["__prediction_score"] = np.nan
-        result["__actual_positive"] = False
-        result["__truth_is_valid"] = False
-        result["__truth_is_invalid"] = False
-        result["__is_failure"] = False
-        result["__failure_type"] = "unscored"
-        result["__confidence"] = np.nan
-        return result
-
-    score = pd.to_numeric(result[prediction_column], errors="coerce")
-    truth = pd.to_numeric(result[truth_column], errors="coerce")
-    predicted_positive = score.ge(request.threshold)
-    actual_positive = truth.eq(1)
-    truth_valid = truth.isin([0, 1])
-    has_eval = score.notna() & truth_valid
-    failure = predicted_positive.ne(actual_positive) & has_eval
-    result["__has_eval"] = has_eval
-    result["__prediction_score"] = score
-    result["__actual_positive"] = actual_positive
-    result["__truth_is_valid"] = truth_valid
-    result["__truth_is_invalid"] = truth.eq(-1)
-    result["__is_failure"] = failure
-    result["__failure_type"] = np.select(
-        [~has_eval, predicted_positive & ~actual_positive, ~predicted_positive & actual_positive, ~failure],
-        ["unscored", "false positive", "false negative", "correct"],
-        default="failure",
+    truth_column = _known_column(frame, request.truth_column)
+    prediction_column = _known_column(frame, request.prediction_column)
+    return attach_binary_evaluation(
+        frame,
+        evaluate_binary(frame, truth_column, prediction_column, request.threshold),
     )
-    result["__confidence"] = np.maximum(score, 1.0 - score)
-    return result
 
 
 def _apply_truth_filter(frame: pd.DataFrame, mode: str) -> pd.DataFrame:
@@ -130,4 +102,3 @@ def page_frame(frame: pd.DataFrame, request: FilterRequest) -> tuple[pd.DataFram
     return frame.iloc[start:start + request.page_size], {
         "total": total, "page": page, "pages": pages, "page_size": request.page_size, "metrics": metrics,
     }
-

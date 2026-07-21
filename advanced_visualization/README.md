@@ -19,9 +19,20 @@ advanced_visualization/web/models.py       request/response contracts
 advanced_visualization/web/repository.py   source discovery and CSV cache
 advanced_visualization/web/filtering.py    review filtering and paging
 advanced_visualization/web/projections.py  projection computation/cache
+advanced_visualization/web/comparisons.py  comparison paging and artifact URLs
+advanced_visualization/web/analysis.py     notebook-analysis application service
 advanced_visualization/web/images.py       image validation/thumbnails
 advanced_visualization/web/static/         browser interface
+
+advanced_visualization/core/evaluation.py  shared binary evaluation semantics
+advanced_visualization/core/comparison.py  ID alignment and A/B outcome logic
+advanced_visualization/core/analysis.py    ori/crop/merged metrics and grouping
 ```
+
+The dependency direction is deliberate: framework-independent dataframe logic
+lives in `core`, HTTP orchestration lives in `web`, and each browser page has its
+own JavaScript module. New views should reuse the core services rather than
+copying filtering, failure, image, or metric logic into a page.
 
 CSV dataframes are cached by file modification time, feature columns are loaded
 as `float32`, filtering and paging happen on the server, images are lazy-loaded,
@@ -52,6 +63,41 @@ resolution to the number and width of visible cards. Clicking any review or
 feature-inspector image opens the shared zoom viewer with wheel, button,
 double-click, keyboard, and drag-to-pan controls. The viewer loads a 2K preview
 first and requests 4K detail only after zooming in.
+
+### Compare Models
+
+`Compare models` aligns two sources by stable sample ID and partitions results
+into:
+
+- both correct
+- Experiment A only correct
+- Experiment B only correct
+- both wrong
+- unscored, truth mismatch, and rows present in only one source
+
+Truth mismatches are quarantined instead of being counted as model failures.
+Repeated IDs are aligned by occurrence to avoid a Cartesian join, and duplicate
+counts are reported in the alignment summary. Each result card shows the A/B
+scores, failure transition, source images, and prepared CAMs. Matrix cells are
+clickable filters.
+
+Use `Open A viewer` and `Open B viewer` to launch independent image-review tabs.
+Each URL contains its own source, columns, threshold, image, and CAM target, so
+changing one viewer does not change the other.
+
+### Results Analysis
+
+`Results analysis` replaces the reporting and image-inspection parts of
+`src/eval/idfraud/annotation/visualize_and_analyze_results.ipynb`. For
+`joined_predictions.csv`, the page automatically selects the notebook's current
+original and crop prediction columns, threshold `0.01`, quality cleanup,
+`Unknown` subclass exclusion, and the two currently excluded data identities.
+
+The page calculates original, crop, and arithmetic-mean merged accuracy, APCER,
+and BPCER using the notebook's exact strict rule (`score > threshold`). It shows
+breakdowns by recapture subclass, data identity, and identity × subclass.
+Clicking a breakdown row drills into its images; the gallery displays original
+and crop images with all three predictions and failure states.
 
 Build the standalone web image with:
 

@@ -1,8 +1,8 @@
 import { getReview } from "./api.js";
+import { bindGalleryImages, byId, escapeText, imagePane, metric } from "./dom.js";
 import { openImageViewer, withMaxSide } from "./image-viewer.js";
 import { categoricalFilters, state } from "./state.js";
 
-const byId = id => document.getElementById(id);
 const THUMBNAIL_SIZES = [256, 480, 768, 1024, 1440];
 let renderedRows = [];
 let renderedPayload = null;
@@ -30,19 +30,8 @@ function requestPayload() {
   };
 }
 
-function metric(label, value) {
-  return `<div class="metric"><strong>${value}</strong><span>${label}</span></div>`;
-}
-
-function escapeText(value) {
-  const element = document.createElement("span");
-  element.textContent = value ?? "Missing";
-  return element.innerHTML;
-}
-
-function imagePane(url, label) {
-  if (!url) return `<div class="card-image"><div class="missing-image">No ${label}</div></div>`;
-  return `<button class="card-image" type="button" data-image="${escapeText(url)}" data-label="${label}"><img loading="lazy" data-thumbnail="${escapeText(url)}" alt="${label}"><span class="image-label">${label}</span></button>`;
+function reviewImagePane(url, label) {
+  return imagePane(url, label).replace("src=", "data-thumbnail=");
 }
 
 function thumbnailSize(target) {
@@ -92,8 +81,8 @@ function renderRows(rows, payload) {
     const score = row.values[payload.prediction_column];
     const confidence = row.values.__confidence;
     const panes = state.imageMode === "both"
-      ? imagePane(row.image_url, "Original") + imagePane(row.gradcam_url, `${payload.gradcam_target === "genuine" ? "Genuine" : "Fraud"} CAM`)
-      : state.imageMode === "gradcam" ? imagePane(row.gradcam_url, `${payload.gradcam_target === "genuine" ? "Genuine" : "Fraud"} CAM`) : imagePane(row.image_url, "Original");
+      ? reviewImagePane(row.image_url, "Original") + reviewImagePane(row.gradcam_url, `${payload.gradcam_target === "genuine" ? "Genuine" : "Fraud"} CAM`)
+      : state.imageMode === "gradcam" ? reviewImagePane(row.gradcam_url, `${payload.gradcam_target === "genuine" ? "Genuine" : "Fraud"} CAM`) : reviewImagePane(row.image_url, "Original");
     const card = document.createElement("article");
     card.className = "card";
     card.innerHTML = `<div class="card-images">${panes}</div><div class="card-body">
@@ -151,15 +140,6 @@ export function bindReview(setBusy, showError) {
     for (const item of byId("image-mode").querySelectorAll("button")) item.classList.toggle("active", item === button);
     if (renderedPayload) renderRows(renderedRows, renderedPayload);
   });
-  byId("gallery").addEventListener("click", event => {
-    const pane = event.target.closest("[data-image]");
-    if (!pane) return;
-    openImageViewer(pane.dataset.image, pane.dataset.label || "Image preview");
-  });
-  byId("gallery").addEventListener("error", event => {
-    if (event.target.tagName !== "IMG") return;
-    const pane = event.target.closest(".card-image");
-    if (pane) pane.innerHTML = '<div class="missing-image">Image file unavailable</div>';
-  }, true);
+  bindGalleryImages("gallery", openImageViewer);
   new ResizeObserver(updateGalleryLayout).observe(byId("review-view"));
 }

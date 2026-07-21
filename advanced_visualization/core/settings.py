@@ -228,14 +228,16 @@ def configured_artifact_dirs() -> list[Path]:
     return dirs
 
 
-def configured_model_sources() -> list[tuple[str, Path, Path]]:
-    sources: list[tuple[str, Path, Path]] = []
-    for model in load_settings().models:
+def configured_model_sources() -> list[tuple[str, Path | None, Path | None]]:
+    settings = load_settings()
+    sources: list[tuple[str, Path | None, Path | None]] = []
+    for model in settings.models:
         if not model.enabled:
             continue
-        artifact_dir = configured_path(model.artifact_dir) if model.artifact_dir.strip() else Path()
-        prediction_csv = configured_path(model.prediction_csv) if model.prediction_csv.strip() else Path()
-        if artifact_dir or prediction_csv:
+        artifact_dir = configured_path(model.artifact_dir) if model.artifact_dir.strip() else None
+        raw_prediction_csv = model.prediction_csv.strip() or settings.prediction_csv.strip()
+        prediction_csv = configured_path(raw_prediction_csv) if raw_prediction_csv else None
+        if artifact_dir is not None or prediction_csv is not None:
             sources.append((model.key, artifact_dir, prediction_csv))
     return sources
 

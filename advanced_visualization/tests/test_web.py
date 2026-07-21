@@ -792,3 +792,16 @@ def test_http_routes_end_to_end(
         )
     )
     assert projection_response["rows"] == 3
+
+
+def test_browser_assets_never_reuse_a_stale_module_graph(tmp_path: Path) -> None:
+    from starlette.datastructures import Headers
+
+    from advanced_visualization.web.app import FreshStaticFiles, NO_CACHE_HEADERS
+
+    static = FreshStaticFiles(directory=tmp_path)
+    assert not static.is_not_modified(
+        Headers({"etag": "same-version"}),
+        Headers({"if-none-match": "same-version"}),
+    )
+    assert NO_CACHE_HEADERS["Cache-Control"].startswith("no-store")

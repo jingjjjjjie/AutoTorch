@@ -23,6 +23,7 @@ def prepared_gradcam_path(
     image_column: str,
     method: str,
     target: str = "fraud",
+    layer: str = "",
 ) -> Path | None:
     if not source.artifact_dir or image_column not in row.index:
         return None
@@ -30,7 +31,11 @@ def prepared_gradcam_path(
     if image_path is None:
         return None
     for candidate in gradcam_cache_candidates(
-        source.artifact_dir / "gradcam", image_path, method=method, target=target
+        source.artifact_dir / "gradcam",
+        image_path,
+        method=method,
+        target=target,
+        layer=layer,
     ):
         if candidate.is_file():
             return candidate
@@ -43,10 +48,12 @@ def prepared_gradcam_url(
     image_column: str,
     method: str,
     target: str = "fraud",
+    layer: str = "",
 ) -> str:
     return (
         f"/api/gradcam/{source_id}/{row_id}?image_column={quote(image_column, safe='')}"
         f"&method={quote(method, safe='')}&target={quote(target, safe='')}"
+        f"&layer={quote(layer, safe='')}"
     )
 
 
@@ -59,13 +66,13 @@ def gradcam_url(
     gradcam_column: str = "",
     method: str = "gradcam",
     target: str = "fraud",
+    layer: str = "",
     max_side: int = 480,
 ) -> str:
     if row_id is None:
         return ""
     if gradcam_column and target == "fraud" and gradcam_column in row.index and valid_image(row[gradcam_column]):
         return image_url(source.id, row_id, gradcam_column, max_side=max_side)
-    if image_column and prepared_gradcam_path(source, row, image_column, method, target):
-        return prepared_gradcam_url(source.id, row_id, image_column, method, target)
+    if image_column and prepared_gradcam_path(source, row, image_column, method, target, layer):
+        return prepared_gradcam_url(source.id, row_id, image_column, method, target, layer)
     return ""
-

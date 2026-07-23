@@ -20,29 +20,16 @@ from advanced_visualization.ui.styles import inject_css
 
 VIEWER_COLUMNS = [
     "enabled",
-    "key",
-    "prediction_csv",
-    "feature_csv",
-    "artifact_dir",
-    "model_type",
-    "image_column",
-    "prediction_column",
-]
-
-PREGENERATION_COLUMNS = [
-    "key",
-    "checkpoint",
-    "weights_epoch",
-    "model_name",
-    "head_type",
-    "image_size",
+    "model_id",
+    "data_dir",
 ]
 
 
 def _model_from_editor_row(row: dict) -> UserModelConfig:
     weights_epoch = row.get("weights_epoch")
     return UserModelConfig(
-        key=str(row.get("key", "")).strip(),
+        key=str(row.get("model_id", row.get("key", ""))).strip(),
+        data_dir=str(row.get("data_dir", "")).strip(),
         prediction_csv=str(row.get("prediction_csv", "")).strip(),
         feature_csv=str(row.get("feature_csv", "")).strip(),
         artifact_dir=str(row.get("artifact_dir", "")).strip(),
@@ -60,9 +47,16 @@ def _model_from_editor_row(row: dict) -> UserModelConfig:
 
 
 def _settings_dataframe(settings: UserSettings) -> pd.DataFrame:
-    rows = [model.to_dict() for model in settings.models]
+    rows = [
+        {
+            "enabled": model.enabled,
+            "model_id": model.key,
+            "data_dir": model.data_dir,
+        }
+        for model in settings.models
+    ]
     if not rows:
-        rows = [UserModelConfig().to_dict()]
+        rows = [{"enabled": True, "model_id": "", "data_dir": ""}]
     return pd.DataFrame(rows)
 
 
@@ -71,8 +65,8 @@ def _empty_frame(columns: list[str]) -> pd.DataFrame:
 
 
 def _render_model_editor(settings: UserSettings) -> list[UserModelConfig]:
-    st.subheader("Viewer Data Sources")
-    st.caption("These fields are enough for the Streamlit viewer. The viewer reads CSVs and prepared images; it does not load model weights.")
+    st.subheader("Registered Models")
+    st.caption("Register only a model ID and data directory. data_dir/router.py resolves all model-specific paths and layers.")
     source_df = _settings_dataframe(settings)
     source_edited = st.data_editor(
         source_df[VIEWER_COLUMNS] if not source_df.empty else _empty_frame(VIEWER_COLUMNS),
@@ -81,57 +75,16 @@ def _render_model_editor(settings: UserSettings) -> list[UserModelConfig]:
         hide_index=True,
         column_config={
             "enabled": st.column_config.CheckboxColumn("Enabled"),
-            "key": st.column_config.TextColumn("Model key", required=True),
-            "prediction_csv": st.column_config.TextColumn("Prediction CSV"),
-            "feature_csv": st.column_config.TextColumn("Feature CSV"),
-            "artifact_dir": st.column_config.TextColumn("Artifact directory"),
-            "model_type": st.column_config.SelectboxColumn("Model type", options=settings.model_type_options),
-            "image_column": st.column_config.TextColumn("Image column"),
-            "prediction_column": st.column_config.TextColumn("Prediction column"),
+            "model_id": st.column_config.TextColumn("Model ID", required=True),
+            "data_dir": st.column_config.TextColumn("Data directory", required=True),
         },
         key="advanced_visualization_settings_model_sources",
     )
 
-    st.subheader("Pregeneration / Model Loading")
-    st.caption("Only CLI preparation uses these fields. Keep them blank for artifact-only models that were generated elsewhere.")
-    generation_df = _settings_dataframe(settings)
-    generation_edited = st.data_editor(
-        generation_df[PREGENERATION_COLUMNS] if not generation_df.empty else _empty_frame(PREGENERATION_COLUMNS),
-        num_rows="dynamic",
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "key": st.column_config.TextColumn("Model key", required=True),
-            "checkpoint": st.column_config.TextColumn("Checkpoint path"),
-            "weights_epoch": st.column_config.NumberColumn("Epoch", min_value=0, step=1),
-            "model_name": st.column_config.TextColumn("Model name"),
-            "head_type": st.column_config.TextColumn("Head type"),
-            "image_size": st.column_config.SelectboxColumn("Image size", options=settings.image_size_options),
-        },
-        key="advanced_visualization_settings_model_generation",
-    )
-
-    existing_by_key = {model.key: model.to_dict() for model in settings.models if model.key}
-    generation_by_key = {
-        str(row.get("key", "")).strip(): row
-        for row in generation_edited.to_dict("records")
-        if str(row.get("key", "")).strip()
-    }
     models = []
-    source_keys = set()
     for source_row in source_edited.to_dict("records"):
-        key = str(source_row.get("key", "")).strip()
-        source_keys.add(key)
-        row = {**existing_by_key.get(key, {}), **source_row, **generation_by_key.get(key, {})}
-        model = _model_from_editor_row(row)
-        if model.key or model.artifact_dir or model.checkpoint or model.prediction_column:
-            models.append(model)
-
-    for key, generation_row in generation_by_key.items():
-        if key in source_keys:
-            continue
-        model = _model_from_editor_row({**existing_by_key.get(key, {}), **generation_row})
-        if model.key or model.checkpoint:
+        model = _model_from_editor_row(source_row)
+        if model.key or model.data_dir:
             models.append(model)
     return models
 
@@ -279,6 +232,21 @@ def _validate(settings: UserSettings) -> list[str]:
     for index, model in enumerate(settings.models, start=1):
         label = model.key or f"row {index}"
         if not model.enabled:
+            continue
+        if model.data_dir:
+            from advanced_visualization.core.model_router import load_model_route
+
+            try:
+                route = load_model_route(model.key, model.data_dir)
+                if not route.prediction_data.is_file():
+                    errors.append(f"{label}: router prediction data does not exist: {route.prediction_data}")
+            except Exception as exc:
+                errors.append(f"{label}: router error: {exc}")
+            if not model.key:
+                errors.append(f"Model {index}: model_id is required.")
+            elif model.key in keys:
+                errors.append(f"Duplicate model ID: {model.key}")
+            keys.add(model.key)
             continue
         prediction_csv = model.prediction_csv or settings.prediction_csv
         if not prediction_csv:

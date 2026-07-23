@@ -17,12 +17,13 @@
 
   <main class="shell">
     <aside id="sidebar" class="sidebar">
-      <label class="field"><span>Data source</span><select id="source-select"></select></label>
+      <label id="source-field" class="field"><span>Data source</span><select id="source-select"></select></label>
       <nav class="tabs" aria-label="Views">
         <button class="tab active" data-view="review">Image review</button>
         <button class="tab" data-view="features">Feature space</button>
         <button class="tab" data-view="comparison">Compare models</button>
         <button class="tab" data-view="analysis">Results analysis</button>
+        <button class="tab" data-view="live">Live inference</button>
       </nav>
 
       <section class="dataset-filters">
@@ -40,8 +41,9 @@
           <label class="field"><span>Item ID</span><select id="item-column"></select></label>
           <label class="field"><span>Image</span><select id="image-column"></select></label>
           <label class="field"><span>Grad-CAM</span><select id="gradcam-column"></select></label>
-          <label class="field"><span>CAM method</span><select id="gradcam-method"><option value="gradcam">Grad-CAM</option><option value="gradcam++">Grad-CAM++</option></select></label>
-          <label class="field"><span>CAM target</span><select id="gradcam-target"><option value="fraud">Fraud evidence</option><option value="genuine">Genuine evidence</option></select></label>
+          <label class="field"><span>CAM method</span><select id="gradcam-method"><option value="gradcam++">Grad-CAM++</option></select></label>
+          <label class="field"><span>CAM layer</span><select id="gradcam-layer"></select></label>
+          <label class="field"><span>CAM target</span><select id="gradcam-target"><option value="fraud">Fraud evidence</option><option value="genuine">Genuine evidence</option><option value="both">Genuine + Fraud</option></select></label>
           <label class="field"><span>Group</span><select id="subclass-column"></select></label>
           <label class="field"><span>Truth</span><select id="truth-column"></select></label>
           <label class="field"><span>Prediction</span><select id="prediction-column"></select></label>
@@ -71,7 +73,9 @@
           <div class="segmented" id="image-mode">
             <button type="button" class="active" data-value="original">Original</button>
             <button type="button" data-value="gradcam">Grad-CAM</button>
-            <button type="button" data-value="both">Both</button>
+            <button type="button" data-value="both">Original + CAM</button>
+            <button type="button" data-value="side_by_side">Genuine vs Fraud</button>
+            <button type="button" data-value="montage">Layer montage</button>
           </div>
           <label class="field"><span>Sort</span><select id="sort">
             <option value="confidence_desc">Confidence descending</option>
@@ -95,7 +99,8 @@
           <label class="field"><span>Color by</span><select id="color-column"></select></label>
           <label class="field"><span>Image</span><select id="feature-image-column"></select></label>
           <label class="field"><span>Grad-CAM</span><select id="feature-gradcam-column"></select></label>
-          <label class="field"><span>CAM target</span><select id="feature-gradcam-target"><option value="fraud">Fraud evidence</option><option value="genuine">Genuine evidence</option></select></label>
+          <label class="field"><span>CAM layer</span><select id="feature-gradcam-layer"></select></label>
+          <label class="field"><span>CAM target</span><select id="feature-gradcam-target"><option value="fraud">Fraud evidence</option><option value="genuine">Genuine evidence</option><option value="both">Genuine + Fraud</option></select></label>
           <label class="field"><span>Maximum rows</span><input id="max-rows" type="number" min="3" max="50000" value="5000"></label>
           <label class="field"><span>Set all subclass limits <output id="class-limit-value">5,000</output></span><input id="class-limit" type="range" min="1" max="5000" value="5000" step="1"></label>
           <details id="subclass-limits-panel" class="subclass-limits-panel hidden" open>
@@ -148,8 +153,10 @@
           <label class="field"><span>B image</span><select id="comparison-image-b"></select></label>
           <label class="field"><span>A Grad-CAM</span><select id="comparison-gradcam-a"></select></label>
           <label class="field"><span>B Grad-CAM</span><select id="comparison-gradcam-b"></select></label>
-          <label class="field"><span>CAM method</span><select id="comparison-gradcam-method"><option value="gradcam">Grad-CAM</option><option value="gradcam++">Grad-CAM++</option></select></label>
-          <label class="field"><span>CAM target</span><select id="comparison-gradcam-target"><option value="fraud">Fraud evidence</option><option value="genuine">Genuine evidence</option></select></label>
+          <label class="field"><span>A CAM layer</span><select id="comparison-gradcam-layer-a"></select></label>
+          <label class="field"><span>B CAM layer</span><select id="comparison-gradcam-layer-b"></select></label>
+          <label class="field"><span>CAM method</span><select id="comparison-gradcam-method"><option value="gradcam++">Grad-CAM++</option></select></label>
+          <label class="field"><span>CAM target</span><select id="comparison-gradcam-target"><option value="fraud">Fraud evidence</option><option value="genuine">Genuine evidence</option><option value="both">Genuine + Fraud side by side</option></select></label>
         </section>
         <section>
           <h2>Metadata and filters</h2>
@@ -207,6 +214,16 @@
         </section>
         <button class="primary" type="submit">Analyze predictions</button>
       </form>
+
+      <form id="live-controls" class="control-stack hidden" onsubmit="return false">
+        <section>
+          <h2>Inference model</h2>
+          <label class="field"><span>Checkpoint</span><select id="live-model"></select></label>
+          <label class="field"><span>CAM method</span><select id="live-method"><option value="gradcam++">Grad-CAM++</option></select></label>
+          <label class="field"><span>Fraud threshold</span><input id="live-threshold" type="number" min="0" max="1" step="0.01" value="0.5"></label>
+        </section>
+        <div id="live-model-note" class="note">Loading configured checkpoints.</div>
+      </form>
     </aside>
 
     <section class="workspace">
@@ -255,6 +272,34 @@
         <div id="analysis-breakdowns" class="breakdown-grid"></div>
         <div id="analysis-gallery" class="analysis-gallery"></div>
         <div class="pager"><button id="analysis-previous" type="button">Previous</button><span id="analysis-page-label"></span><button id="analysis-next" type="button">Next</button></div>
+      </div>
+      <div id="live-view" class="hidden">
+        <div class="workspace-heading live-heading"><div><h1>Live inference</h1><p>Upload one image to generate a prediction and class-targeted Grad-CAM explanations.</p></div></div>
+        <input id="live-file" class="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/bmp">
+        <section id="live-dropzone" class="live-dropzone" tabindex="0">
+          <div id="live-empty" class="live-empty">
+            <div class="upload-mark">+</div>
+            <strong>Drop an image here</strong>
+            <span id="live-file-name">PNG, JPEG, WebP, or BMP up to 20 MB</span>
+            <button id="choose-live-file" class="quiet-button" type="button">Choose image</button>
+          </div>
+          <div id="live-preview-wrap" class="live-preview-wrap hidden">
+            <img id="live-preview" alt="Uploaded image preview">
+            <div class="live-preview-footer"><span id="live-preview-label">Ready for inference</span><button id="run-live-inference" class="primary" type="button">Run prediction + Grad-CAM</button></div>
+          </div>
+        </section>
+
+        <section id="live-results" class="live-results hidden">
+          <div class="live-result-heading">
+            <div><span class="eyebrow">Prediction</span><strong id="live-prediction-badge" class="live-prediction">—</strong></div>
+            <span id="live-result-meta" class="live-result-meta"></span>
+          </div>
+          <div class="live-scores">
+            <div class="live-score-card genuine"><div><span>Genuine probability</span><strong id="live-genuine-score">—</strong></div><div class="score-track"><span id="live-genuine-bar"></span></div></div>
+            <div class="live-score-card fraud"><div><span>Fraud probability</span><strong id="live-fraud-score">—</strong></div><div class="score-track"><span id="live-fraud-bar"></span></div></div>
+          </div>
+          <div id="live-cams" class="live-cams"></div>
+        </section>
       </div>
       <div id="loading" class="loading hidden"><span></span>Loading</div>
     </section>

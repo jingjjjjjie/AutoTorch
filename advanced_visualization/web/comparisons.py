@@ -110,6 +110,7 @@ def comparison_page(repository: DatasetRepository, request: ComparisonRequest) -
                 gradcam_column=request.gradcam_column_a,
                 method=request.gradcam_method,
                 target=request.gradcam_target,
+                layer=request.gradcam_layer_a,
             ),
             "b_gradcam_url": gradcam_url(
                 source_b, source_row_b, row_id_b,
@@ -117,6 +118,39 @@ def comparison_page(repository: DatasetRepository, request: ComparisonRequest) -
                 gradcam_column=request.gradcam_column_b,
                 method=request.gradcam_method,
                 target=request.gradcam_target,
+                layer=request.gradcam_layer_b,
+            ),
+            "a_genuine_gradcam_url": gradcam_url(
+                source_a, source_row_a, row_id_a,
+                image_column=request.image_column_a,
+                gradcam_column=request.gradcam_column_a,
+                method=request.gradcam_method,
+                target="genuine",
+                layer=request.gradcam_layer_a,
+            ),
+            "a_fraud_gradcam_url": gradcam_url(
+                source_a, source_row_a, row_id_a,
+                image_column=request.image_column_a,
+                gradcam_column=request.gradcam_column_a,
+                method=request.gradcam_method,
+                target="fraud",
+                layer=request.gradcam_layer_a,
+            ),
+            "b_genuine_gradcam_url": gradcam_url(
+                source_b, source_row_b, row_id_b,
+                image_column=request.image_column_b,
+                gradcam_column=request.gradcam_column_b,
+                method=request.gradcam_method,
+                target="genuine",
+                layer=request.gradcam_layer_b,
+            ),
+            "b_fraud_gradcam_url": gradcam_url(
+                source_b, source_row_b, row_id_b,
+                image_column=request.image_column_b,
+                gradcam_column=request.gradcam_column_b,
+                method=request.gradcam_method,
+                target="fraud",
+                layer=request.gradcam_layer_b,
             ),
         })
     return {

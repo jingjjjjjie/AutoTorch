@@ -15,6 +15,7 @@ function requestPayload() {
     gradcam_column: byId("gradcam-column").value,
     gradcam_method: byId("gradcam-method").value,
     gradcam_target: byId("gradcam-target").value,
+    gradcam_layer: byId("gradcam-layer").value,
     subclass_column: byId("subclass-column").value,
     truth_column: byId("truth-column").value,
     prediction_column: byId("prediction-column").value,
@@ -49,7 +50,9 @@ function updateGalleryLayout() {
   const card = gallery.querySelector(".card");
   if (!card) return;
   const cardWidth = card.getBoundingClientRect().width;
-  const mediaHeight = state.imageMode === "both"
+  const mediaHeight = state.imageMode === "montage"
+    ? Math.min(760, Math.max(420, 360 + cardWidth * 0.55))
+    : ["both", "side_by_side"].includes(state.imageMode)
     ? Math.min(360, Math.max(190, 175 + cardWidth * 0.26))
     : Math.min(540, Math.max(215, 180 + cardWidth * 0.6));
   gallery.style.setProperty("--card-media-height", `${Math.round(mediaHeight)}px`);
@@ -80,12 +83,33 @@ function renderRows(rows, payload) {
     const failure = String(row.values.__failure_type || "unscored");
     const score = row.values[payload.prediction_column];
     const confidence = row.values.__confidence;
+    const targetLabel = payload.gradcam_target === "genuine" ? "Genuine" : "Fraud";
+    const selectedCam = payload.gradcam_target === "genuine"
+      ? row.genuine_gradcam_url
+      : row.fraud_gradcam_url;
+    const targetPanes = payload.gradcam_target === "both"
+      ? reviewImagePane(row.genuine_gradcam_url, `${payload.gradcam_layer} · Genuine`)
+        + reviewImagePane(row.fraud_gradcam_url, `${payload.gradcam_layer} · Fraud`)
+      : reviewImagePane(selectedCam, `${payload.gradcam_layer} · ${targetLabel}`);
+    const montagePanes = (row.gradcam_layers || []).map(layer => {
+      if (payload.gradcam_target === "genuine") return reviewImagePane(layer.genuine_url, `${layer.layer} · Genuine`);
+      if (payload.gradcam_target === "fraud") return reviewImagePane(layer.fraud_url, `${layer.layer} · Fraud`);
+      return reviewImagePane(layer.genuine_url, `${layer.layer} · Genuine`)
+        + reviewImagePane(layer.fraud_url, `${layer.layer} · Fraud`);
+    }).join("");
     const panes = state.imageMode === "both"
-      ? reviewImagePane(row.image_url, "Original") + reviewImagePane(row.gradcam_url, `${payload.gradcam_target === "genuine" ? "Genuine" : "Fraud"} CAM`)
-      : state.imageMode === "gradcam" ? reviewImagePane(row.gradcam_url, `${payload.gradcam_target === "genuine" ? "Genuine" : "Fraud"} CAM`) : reviewImagePane(row.image_url, "Original");
+      ? reviewImagePane(row.image_url, "Original") + targetPanes
+      : state.imageMode === "gradcam"
+        ? targetPanes
+        : state.imageMode === "side_by_side"
+          ? reviewImagePane(row.genuine_gradcam_url, `${payload.gradcam_layer} · Genuine`)
+            + reviewImagePane(row.fraud_gradcam_url, `${payload.gradcam_layer} · Fraud`)
+          : state.imageMode === "montage"
+            ? montagePanes
+            : reviewImagePane(row.image_url, "Original");
     const card = document.createElement("article");
     card.className = "card";
-    card.innerHTML = `<div class="card-images">${panes}</div><div class="card-body">
+    card.innerHTML = `<div class="card-images ${state.imageMode === "montage" ? "montage" : ""}">${panes}</div><div class="card-body">
       <div class="card-title"><strong>${escapeText(row.values[idColumn] ?? `Row ${row.row_id}`)}</strong><span class="status ${failure.replaceAll(" ", "-")}">${escapeText(failure)}</span></div>
       <div class="card-meta">${escapeText(row.values[groupColumn] ?? "No group")} | pred ${score == null ? "-" : Number(score).toFixed(4)} | conf ${confidence == null ? "-" : Number(confidence).toFixed(3)}</div>
     </div>`;

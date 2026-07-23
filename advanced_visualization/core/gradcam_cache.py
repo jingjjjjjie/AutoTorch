@@ -18,24 +18,31 @@ def gradcam_cache_candidates(
     method: str = "",
     space: str = "original",
     target: str = "fraud",
+    layer: str = "",
 ) -> list[Path]:
     digest = image_cache_digest(image_path)
     if not digest:
         return []
     space_marker = "_model_input" if space == "model-input" else ""
     target_marker = "_genuine" if target == "genuine" else ""
+    nested = (
+        root / layer / target / f"{digest}_gradcampp_logit.webp"
+        if layer and method in {"gradcam++", "gradcampp", ""}
+        else None
+    )
     if method == "gradcam":
         return [
             root / f"{digest}_gradcam{target_marker}_logit{space_marker}.png",
             root / f"{digest}_gradcam{target_marker}{space_marker}.png",
         ]
     if method in {"gradcam++", "gradcampp"}:
-        return [
+        candidates = [
             root / f"{digest}_gradcampp{target_marker}_logit{space_marker}.png",
             root / f"{digest}_gradcampp{target_marker}{space_marker}.png",
         ]
+        return ([nested] if nested is not None else []) + candidates
     if target == "genuine":
-        return [
+        candidates = [
             root / f"{digest}_gradcam_genuine_logit.png",
             root / f"{digest}_gradcam_genuine_logit_model_input.png",
             root / f"{digest}_gradcampp_genuine_logit.png",
@@ -45,7 +52,8 @@ def gradcam_cache_candidates(
             root / f"{digest}_gradcampp_genuine.png",
             root / f"{digest}_gradcampp_genuine_model_input.png",
         ]
-    return [
+        return ([nested] if nested is not None else []) + candidates
+    candidates = [
         root / f"{digest}_gradcam_logit.png",
         root / f"{digest}_gradcam_logit_model_input.png",
         root / f"{digest}_gradcampp_logit.png",
@@ -55,6 +63,7 @@ def gradcam_cache_candidates(
         root / f"{digest}_gradcampp.png",
         root / f"{digest}_gradcampp_model_input.png",
     ]
+    return ([nested] if nested is not None else []) + candidates
 
 
 GRADCAM_PRIORITY = (

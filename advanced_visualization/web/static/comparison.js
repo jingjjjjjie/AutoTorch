@@ -26,6 +26,7 @@ const sideIds = side => ({
   prediction: `comparison-prediction-${side}`,
   image: `comparison-image-${side}`,
   gradcam: `comparison-gradcam-${side}`,
+  layer: `comparison-gradcam-layer-${side}`,
 });
 
 function sourceSelectOptions(select, sources, preferred) {
@@ -43,6 +44,12 @@ function populateSide(schema, side) {
   if (!schema.gradcam_columns.length && schema.prepared_gradcam_methods.length) {
     byId(ids.gradcam).options[0].textContent = "Auto-detect prepared CAM";
   }
+  setOptions(
+    byId(ids.layer),
+    schema.prepared_gradcam_layers || [],
+    schema.default_gradcam_layer || "",
+    false,
+  );
   if (schema.review_preset?.threshold != null) {
     byId(`comparison-threshold-${side}`).value = String(schema.review_preset.threshold);
   }
@@ -113,6 +120,8 @@ function payload() {
     gradcam_column_b: byId("comparison-gradcam-b").value,
     gradcam_method: byId("comparison-gradcam-method").value,
     gradcam_target: byId("comparison-gradcam-target").value,
+    gradcam_layer_a: byId("comparison-gradcam-layer-a").value,
+    gradcam_layer_b: byId("comparison-gradcam-layer-b").value,
     threshold_a: Number(byId("comparison-threshold-a").value),
     threshold_b: Number(byId("comparison-threshold-b").value),
     subclass_column: byId("comparison-subclass").value,
@@ -168,9 +177,15 @@ function renderRows(rows) {
     const metadata = Object.entries(row.metadata || {})
       .map(([column, value]) => `${escapeText(column)}: ${escapeText(value)}`)
       .join(" · ");
-    const camPanes = row.a_gradcam_url || row.b_gradcam_url
-      ? imagePane(row.a_gradcam_url, "A CAM") + imagePane(row.b_gradcam_url, "B CAM")
-      : "";
+    const target = byId("comparison-gradcam-target").value;
+    const camPanes = target === "both"
+      ? imagePane(row.a_genuine_gradcam_url, "A Genuine")
+        + imagePane(row.a_fraud_gradcam_url, "A Fraud")
+        + imagePane(row.b_genuine_gradcam_url, "B Genuine")
+        + imagePane(row.b_fraud_gradcam_url, "B Fraud")
+      : (row.a_gradcam_url || row.b_gradcam_url
+        ? imagePane(row.a_gradcam_url, `A ${target}`) + imagePane(row.b_gradcam_url, `B ${target}`)
+        : "");
     return `<article class="comparison-card">
       <div class="comparison-card-heading">
         <div><strong>${escapeText(row.item_id)}${row.occurrence ? ` · occurrence ${row.occurrence + 1}` : ""}</strong><span>${metadata}</span></div>
@@ -219,6 +234,7 @@ function detachedViewer(side) {
     gradcam: byId(`comparison-gradcam-${side}`).value,
     threshold: byId(`comparison-threshold-${side}`).value,
     target: byId("comparison-gradcam-target").value,
+    layer: byId(`comparison-gradcam-layer-${side}`).value,
   });
   window.open(`/?${parameters}`, "_blank", "noopener");
 }

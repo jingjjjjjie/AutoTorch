@@ -52,6 +52,23 @@ class ModelRunConfig:
 def configured_model_runs() -> dict[str, ModelRunConfig]:
     runs: dict[str, ModelRunConfig] = {}
     for model in load_settings().models:
+        if model.enabled and model.key.strip() and model.data_dir.strip():
+            from advanced_visualization.core.model_router import load_model_route
+
+            route = load_model_route(model.key, model.data_dir)
+            if route.framework != "pytorch" or route.checkpoint is None:
+                continue
+            runs[model.key] = ModelRunConfig(
+                key=model.key,
+                checkpoint=route.checkpoint,
+                model_name=route.model_name,
+                head_type=route.head_type,
+                image_size=route.image_size,
+                image_column=route.columns.get("image", ""),
+                gradcam_engine=route.engine,
+                prediction_column=route.columns.get("prediction", ""),
+            )
+            continue
         checkpoint = model.resolved_checkpoint()
         if not model.enabled or not model.key.strip() or checkpoint is None:
             continue
@@ -96,6 +113,11 @@ def model_run(key: str) -> ModelRunConfig:
 
 
 def gradcam_artifact_root(config_key: str) -> Optional[Path]:
+    from advanced_visualization.core.model_router import route_for_model
+
+    route = route_for_model(config_key)
+    if route is not None:
+        return route.artifact_dir / "gradcam"
     config = all_model_runs().get(config_key)
     if not config:
         return None

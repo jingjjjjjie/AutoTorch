@@ -48,9 +48,10 @@ class VisualizationManifest:
     @classmethod
     def from_json_dict(cls, payload: dict) -> "VisualizationManifest":
         artifact_dir = Path(payload.get("artifact_dir") or payload.get("artifact_root") or "")
-        prepared_csv = Path(payload.get("prepared_csv") or payload.get("prepared_predictions_csv") or artifact_dir / PREPARED_CSV_NAME)
-        model_key = str(payload.get("model_key") or payload.get("run_name") or artifact_dir.name)
+        prepared_csv = Path(payload.get("prepared_csv") or payload.get("prepared_predictions_csv") or payload.get("prepared_predictions") or artifact_dir / PREPARED_CSV_NAME)
+        model_key = str(payload.get("model_key") or payload.get("model_id") or payload.get("run_name") or artifact_dir.name)
         gradcam_dir = Path(payload.get("gradcam_dir") or artifact_dir / "gradcam")
+        columns = dict(payload.get("columns") or {})
         return cls(
             artifact_dir=artifact_dir,
             prepared_csv=prepared_csv,
@@ -58,11 +59,11 @@ class VisualizationManifest:
             model_key=model_key,
             checkpoint=Path(payload.get("checkpoint") or ""),
             gradcam_dir=gradcam_dir,
-            image_column=str(payload.get("image_column", "")),
-            item_id_column=str(payload.get("item_id_column", "")),
-            truth_column=str(payload.get("truth_column", "")),
-            prediction_column=str(payload.get("prediction_column", "")),
-            subclass_column=str(payload.get("subclass_column", "")),
+            image_column=str(payload.get("image_column") or columns.get("image") or ""),
+            item_id_column=str(payload.get("item_id_column") or columns.get("sample_id") or ""),
+            truth_column=str(payload.get("truth_column") or columns.get("truth") or ""),
+            prediction_column=str(payload.get("prediction_column") or columns.get("prediction") or ""),
+            subclass_column=str(payload.get("subclass_column") or columns.get("subclass") or ""),
         )
 
 

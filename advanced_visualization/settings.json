@@ -2,7 +2,7 @@
   "prediction_csv": "/home/jingjie/AutoTorch/src/eval/idfraud/annotation/joined_predictions.csv",
   "manifest_name": "visualization_manifest.json",
   "prepared_csv_name": "prepared_predictions.csv",
-  "default_gradcam_root": "advanced_visualization/gradcam",
+  "default_gradcam_root": "/mnt4/advanced_visualization",
   "image_columns": [
     "absolute_ori_path",
     "absolute_ocr_path",
@@ -42,7 +42,7 @@
     0.225
   ],
   "review": {
-    "default_model_key": "Ex8point2res1024largerbs_square_exp",
+    "default_model_key": "square_exp2_Ex8point2res1024_largerbs_21plusaugfeb_UniRepLKNet_T_legacy_v1_1024_ori_epoch8",
     "positive_truth_value": 1,
     "negative_truth_value": 0,
     "invalid_truth_value": -1,
@@ -168,20 +168,23 @@
       ],
       "layers": [
         {
-          "key": "default",
-          "label": "Prepared Grad-CAM",
-          "column_candidates": [
-            "gradcam_path",
-            "gradcam",
-            "heatmap_path"
-          ]
+          "key": "stage1",
+          "label": "stage1"
+        },
+        {
+          "key": "stage2",
+          "label": "stage2"
+        },
+        {
+          "key": "stage3",
+          "label": "stage3"
         },
         {
           "key": "stage4",
           "label": "stage4"
         }
       ],
-      "default_layer": "default",
+      "default_layer": "stage4",
       "prediction_candidates": [
         "prediction",
         "pred",
@@ -198,7 +201,7 @@
   ],
   "pipeline": {
     "batch_size": 8,
-    "gradcam_batch_size": 16,
+    "gradcam_batch_size": 1,
     "num_workers": 4,
     "save_workers": 8,
     "only_missing_gradcam": true,
@@ -206,127 +209,38 @@
     "extract_features": true,
     "gradcam_limit": 0,
     "cam_methods": [
-      "gradcam",
       "gradcam++"
     ]
   },
   "models": [
     {
-      "key": "Ex8point2_UniRepLKNet_T_legacy_v1_512_ori_epoch10",
-      "prediction_csv": "/home/jingjie/AutoTorch/src/eval/idfraud/annotation/joined_predictions.csv",
-      "feature_csv": "/home/jingjie/AutoTorch/advanced_visualization/output/Ex8point2_UniRepLKNet_T_legacy_v1_512_ori_epoch10_full_features.csv",
-      "artifact_dir": "/mnt5/temp_jj/Ex8point2_UniRepLKNet_T_legacy_v1_512_ori",
-      "checkpoint": "/mnt5/temp_jj/Ex8point2_UniRepLKNet_T_legacy_v1_512_ori/checkpoints/epoch_10.pt",
-      "weights_epoch": 10,
-      "model_type": "unireplknet",
-      "model_name": "unireplknet_t",
-      "head_type": "legacy_v1",
-      "image_size": 512,
-      "image_column": "absolute_ori_path",
-      "prediction_column": "exp8point2_pred_ori",
+      "model_id": "Ex8point2_UniRepLKNet_T_legacy_v1_512_ori_epoch10",
+      "data_dir": "/mnt5/temp_jj/Ex8point2_UniRepLKNet_T_legacy_v1_512_ori",
       "enabled": true
     },
     {
-      "key": "Ex8point4_UniRepLKNet_B_in22k_legacy_v1_512_crop_epoch7",
-      "prediction_csv": "/home/jingjie/AutoTorch/src/eval/idfraud/annotation/joined_predictions.csv",
-      "feature_csv": "/home/jingjie/AutoTorch/advanced_visualization/output/Ex8point4_UniRepLKNet_B_in22k_legacy_v1_512_crop_epoch7_full_features.csv",
-      "artifact_dir": "/mnt5/temp_jj/Ex8point4_UniRepLKNet_B_in22k_legacy_v1_512_crop",
-      "checkpoint": "/mnt5/temp_jj/Ex8point4_UniRepLKNet_B_in22k_legacy_v1_512_crop/checkpoints/epoch_7.pt",
-      "weights_epoch": 7,
-      "model_type": "unireplknet",
-      "model_name": "unireplknet_b_in22k",
-      "head_type": "legacy_v1",
-      "image_size": 512,
-      "image_column": "absolute_ocr_path",
-      "prediction_column": "exp8point4_pred_crop",
+      "model_id": "Ex8point4_UniRepLKNet_B_in22k_legacy_v1_512_crop_epoch7",
+      "data_dir": "/mnt5/temp_jj/Ex8point4_UniRepLKNet_B_in22k_legacy_v1_512_crop",
       "enabled": true
     },
     {
-      "key": "Ex8point2res1024_moredata_largerbs_UniRepLKNet_T_legacy_v1_1024_ori_epoch11",
-      "prediction_csv": "/home/jingjie/AutoTorch/src/eval/idfraud/annotation/joined_predictions.csv",
-      "feature_csv": "/home/jingjie/AutoTorch/advanced_visualization/output/Ex8point2res1024_moredata_largerbs_UniRepLKNet_T_legacy_v1_1024_ori_epoch11_full_features.csv",
-      "artifact_dir": "/mnt5/temp_jj/Ex8point2res1024_moredata_largerbs_UniRepLKNet_T_legacy_v1_1024_ori",
-      "checkpoint": "/mnt5/temp_jj/Ex8point2res1024_moredata_largerbs_UniRepLKNet_T_legacy_v1_1024_ori/checkpoints/epoch_11.pt",
-      "weights_epoch": 11,
-      "model_type": "unireplknet",
-      "model_name": "unireplknet_t",
-      "head_type": "legacy_v1",
-      "image_size": 1024,
-      "image_column": "absolute_ori_path",
-      "prediction_column": "Ex8point2res1024largerbs_pred_ori",
+      "model_id": "Ex8point2res1024_moredata_largerbs_UniRepLKNet_T_legacy_v1_1024_ori_epoch11",
+      "data_dir": "/mnt5/temp_jj/Ex8point2res1024_moredata_largerbs_UniRepLKNet_T_legacy_v1_1024_ori",
       "enabled": true
     },
     {
-      "key": "Ex8point2res1024largerbs_square_exp",
-      "prediction_csv": "/home/jingjie/AutoTorch/src/eval/idfraud/annotation/joined_predictions.csv",
-      "feature_csv": "/mnt5/temp_jj/square_exp2_Ex8point2res1024_largerbs_21plusaugfeb_UniRepLKNet_T_legacy_v1_1024_ori/prepared_predictions.csv",
-      "artifact_dir": "/mnt5/temp_jj/square_exp2_Ex8point2res1024_largerbs_21plusaugfeb_UniRepLKNet_T_legacy_v1_1024_ori",
-      "checkpoint": "/mnt5/temp_jj/square_exp2_Ex8point2res1024_largerbs_21plusaugfeb_UniRepLKNet_T_legacy_v1_1024_ori/checkpoints/epoch_8.pt",
-      "weights_epoch": 8,
-      "model_type": "unireplknet",
-      "model_name": "unireplknet_t",
-      "head_type": "legacy_v1",
-      "image_size": 1024,
-      "image_column": "absolute_ori_path",
-      "prediction_column": "Ex8point2res1024largerbs_square_exp_pred_ori",
-      "review_preset": {
-        "image_column": "absolute_ori_path",
-        "prediction_column": "Ex8point2res1024largerbs_square_exp_pred_ori",
-        "truth_column": "label",
-        "subclass_column": "Recapture_Subclass",
-        "threshold": 0.01,
-        "truth_rows": "valid",
-        "failure_mode": "failures",
-        "image_mode": "original",
-        "categorical_filters": {
-          "Quality_Issue": {
-            "include": [
-              "0.0"
-            ]
-          },
-          "Recapture_Subclass": {
-            "exclude": [
-              "Unknown"
-            ]
-          },
-          "Data_Identity": {
-            "exclude": [
-              "Aug_2025_myID_datacollection",
-              "Feb_2026_mixed_RoutineAnnotation"
-            ]
-          }
-        }
-      },
+      "model_id": "square_exp2_Ex8point2res1024_largerbs_21plusaugfeb_UniRepLKNet_T_legacy_v1_1024_ori_epoch8",
+      "data_dir": "/mnt5/temp_jj/square_exp2_Ex8point2res1024_largerbs_21plusaugfeb_UniRepLKNet_T_legacy_v1_1024_ori",
       "enabled": true
     },
     {
-      "key": "ench21_vansmall_ori",
-      "prediction_csv": "/mnt5/temp_jj/ench21_vansmall_ori/prepared_predictions.csv",
-      "feature_csv": "/mnt5/temp_jj/ench21_vansmall_ori/prepared_predictions.csv",
-      "artifact_dir": "/mnt5/temp_jj/ench21_vansmall_ori",
-      "checkpoint": "",
-      "weights_epoch": null,
-      "model_type": "artifact_only",
-      "model_name": "vansmall",
-      "head_type": "tensorflow_export",
-      "image_size": 0,
-      "image_column": "absolute_ori_path",
-      "prediction_column": "tf_ori_pred",
+      "model_id": "ench21_vansmall_ori",
+      "data_dir": "/mnt5/temp_jj/ench21_vansmall_ori",
       "enabled": true
     },
     {
-      "key": "ench21_vansmall_crop",
-      "prediction_csv": "/mnt5/temp_jj/ench21_vansmall_crop/prepared_predictions.csv",
-      "feature_csv": "/mnt5/temp_jj/ench21_vansmall_crop/prepared_predictions.csv",
-      "artifact_dir": "/mnt5/temp_jj/ench21_vansmall_crop",
-      "checkpoint": "",
-      "weights_epoch": null,
-      "model_type": "artifact_only",
-      "model_name": "vansmall",
-      "head_type": "tensorflow_export",
-      "image_size": 0,
-      "image_column": "absolute_crop_path",
-      "prediction_column": "tf_crop_pred",
+      "model_id": "ench21_vansmall_crop",
+      "data_dir": "/mnt5/temp_jj/ench21_vansmall_crop",
       "enabled": true
     }
   ]

@@ -30,7 +30,7 @@ button { cursor: pointer; }
 .tabs, .segmented { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px; padding: 3px; margin: 16px 0; background: #151715; border: 1px solid var(--line); border-radius: 6px; }
 .tab, .segmented button { min-height: 34px; border: 0; border-radius: 4px; color: var(--muted); background: transparent; }
 .tab.active, .segmented button.active { color: var(--text); background: var(--panel-2); box-shadow: inset 0 0 0 1px #454a45; }
-.segmented { grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 4px 0 12px; }
+.segmented { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 4px 0 12px; }
 .control-stack { display: grid; gap: 16px; }
 .control-stack section { display: grid; gap: 10px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
 .dataset-filters { display: grid; gap: 9px; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
@@ -97,6 +97,8 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .card-image { position: relative; min-width: 0; border: 0; padding: 0; background: #101110; overflow: hidden; }
 .card-image + .card-image { border-left: 1px solid var(--line); }
 .card-image img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.card-images.montage { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: auto; }
+.card-images.montage .card-image { min-height: 180px; border: 1px solid var(--line); }
 .image-label { position: absolute; left: 6px; bottom: 6px; padding: 2px 5px; background: rgba(10,12,10,.82); color: var(--muted); font-size: 10px; border-radius: 3px; }
 .missing-image { display: grid; place-items: center; height: 100%; color: #737a73; font-size: 12px; }
 .card-body { padding: 9px; }
@@ -184,6 +186,38 @@ body:has(.projection-layout.fullscreen) #plot-fullscreen { position: fixed; top:
 .breakdown-table-wrap { max-height: 310px; overflow: auto; }
 .breakdown-table tbody tr { cursor: pointer; }
 .breakdown-table tbody tr:hover, .breakdown-table tbody tr:focus { outline: none; background: var(--accent-dark); }
+.live-heading { margin-top: 0; }
+.live-dropzone { min-height: 430px; display: grid; place-items: center; padding: 18px; background: #111311; border: 1px dashed #4b514b; border-radius: 8px; transition: border-color .15s, background .15s; }
+.live-dropzone:hover, .live-dropzone.dragging, .live-dropzone:focus { outline: none; border-color: var(--accent); background: #131a16; }
+.live-empty { display: grid; justify-items: center; gap: 10px; color: var(--muted); text-align: center; }
+.live-empty strong { color: var(--text); font-size: 18px; }
+.upload-mark { display: grid; place-items: center; width: 48px; height: 48px; color: var(--accent); background: var(--accent-dark); border: 1px solid #2c724c; border-radius: 50%; font-size: 27px; font-weight: 300; }
+.live-preview-wrap { display: grid; justify-items: center; gap: 14px; width: 100%; }
+.live-preview-wrap > img { display: block; width: 100%; height: min(62vh, 570px); object-fit: contain; }
+.live-preview-footer { display: flex; align-items: center; justify-content: space-between; gap: 18px; width: min(100%, 760px); color: var(--muted); }
+.live-preview-footer .primary { padding: 0 18px; }
+.live-results { display: grid; gap: 14px; margin-top: 24px; scroll-margin-top: 72px; }
+.live-result-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; padding: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+.live-result-heading > div { display: grid; gap: 5px; }
+.eyebrow { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+.live-prediction { width: max-content; padding: 4px 10px; border-radius: 4px; font-size: 21px; text-transform: capitalize; }
+.live-prediction.genuine { color: #91edbb; background: var(--accent-dark); }
+.live-prediction.fraud { color: #ffaaa4; background: #4b2423; }
+.live-result-meta { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.live-scores { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.live-score-card { display: grid; gap: 10px; padding: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+.live-score-card > div:first-child { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; color: var(--muted); }
+.live-score-card strong { color: var(--text); font-size: 23px; font-variant-numeric: tabular-nums; }
+.score-track { height: 6px; overflow: hidden; background: #111311; border-radius: 10px; }
+.score-track span { display: block; width: 0; height: 100%; transition: width .35s ease; }
+.live-score-card.genuine .score-track span { background: var(--accent); }
+.live-score-card.fraud .score-track span { background: var(--danger); }
+.live-cams { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+.live-cams figure { min-width: 0; margin: 0; overflow: hidden; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+.live-cams figcaption { display: grid; gap: 2px; padding: 11px 12px; }
+.live-cams figcaption span { color: var(--muted); font-size: 11px; }
+.live-cams .card-image { display: block; width: 100%; height: min(58vh, 590px); border-top: 1px solid var(--line); cursor: zoom-in; }
+.live-cams .card-image img { object-fit: contain; }
 dialog { width: min(98vw, 1800px); height: 96vh; max-width: none; max-height: none; padding: 0; overflow: hidden; background: #0c0d0c; border: 1px solid var(--line); }
 dialog::backdrop { background: rgba(0,0,0,.78); }
 .dialog-shell { display: grid; grid-template-rows: 48px minmax(0, 1fr); width: 100%; height: 100%; }
@@ -230,4 +264,8 @@ dialog::backdrop { background: rgba(0,0,0,.78); }
   .comparison-scores, .analysis-scores { grid-template-columns: 1fr; }
   .breakdown-grid { grid-template-columns: 1fr; }
   .breakdown-panel:last-child { grid-column: auto; }
+  .live-dropzone { min-height: 330px; padding: 10px; }
+  .live-preview-footer, .live-result-heading { align-items: stretch; flex-direction: column; }
+  .live-preview-footer .primary { width: 100%; }
+  .live-scores, .live-cams { grid-template-columns: 1fr; }
 }

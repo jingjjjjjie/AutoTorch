@@ -13,6 +13,7 @@ from starlette.types import Scope
 from advanced_visualization.web.routes import (
     artifacts,
     experiments,
+    live_inference,
     projections,
     review,
     sources,
@@ -45,7 +46,14 @@ class FreshStaticFiles(StaticFiles):
 
 def create_app() -> FastAPI:
     application = FastAPI(title="AutoTorch Visualization", version="1.1.1")
-    for route_module in (sources, review, projections, experiments, artifacts):
+    for route_module in (
+        sources,
+        review,
+        projections,
+        experiments,
+        artifacts,
+        live_inference,
+    ):
         application.include_router(route_module.router)
     application.mount("/assets", FreshStaticFiles(directory=STATIC_DIR), name="assets")
 

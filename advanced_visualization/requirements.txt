@@ -10,3 +10,5 @@ scikit-learn>=1.2
 umap-learn>=0.5
 torch
 torchvision
+timm>=0.9
+omegaconf>=2.3

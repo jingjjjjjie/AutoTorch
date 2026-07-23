@@ -15,5 +15,32 @@ services:
       - /mnt5:/mnt5
       - /tmp:/tmp
     working_dir: /app
+    environment:
+      TF_VAN_LIVE_URL: http://tensorflow-vansmall-live:8701
+    depends_on:
+      - tensorflow-vansmall-live
+    shm_size: "2gb"
+    restart: unless-stopped
+
+  tensorflow-vansmall-live:
+    build:
+      context: ..
+      dockerfile: advanced_visualization/tensorflow_service/Dockerfile
+    image: autotorch-tensorflow-vansmall-live:latest
+    container_name: autotorch-tensorflow-vansmall-live
+    ports:
+      - "8701:8701"
+    volumes:
+      - ..:/app:ro
+      - ${IDRECAPTURE_REPO_PATH:-/home/jingjie/Dev/automl_platform/idrecapture_server}:/idrecapture_server:ro
+      - /mnt3:/mnt3:ro
+      - /mnt4:/mnt4
+      - /mnt5:/mnt5:ro
+      - /routine_data:/routine_data:ro
+    environment:
+      CUDA_VISIBLE_DEVICES: ${VANSMALL_CUDA_VISIBLE_DEVICES:-0}
+      VANSMALL_GPU_MEMORY_LIMIT_MB: ${VANSMALL_GPU_MEMORY_LIMIT_MB:-2400}
+      ADVANCED_VISUALIZATION_ARTIFACT_ROOT: /mnt4/advanced_visualization
+    runtime: nvidia
     shm_size: "2gb"
     restart: unless-stopped

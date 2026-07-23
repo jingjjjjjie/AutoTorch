@@ -4,7 +4,8 @@ import { initializeCategoricalFilters, renderCategoricalFilters } from "./catego
 import { bindComparison, configureComparison, loadComparison } from "./comparison.js";
 import { byId } from "./dom.js";
 import { bindImageViewer } from "./image-viewer.js";
-import { bindProjection, clearProjection } from "./projection.js";
+import { bindLiveInference, configureLiveInference } from "./live-inference.js";
+import { bindProjection, clearProjection, loadProjection } from "./projection.js";
 import { bindReview, loadReview } from "./review.js";
 import { setOptions, state } from "./state.js";
 
@@ -28,6 +29,17 @@ function applyReviewPreset(schema) {
   selectValue("subclass-column", preset.subclass_column);
   selectValue("truth-rows", preset.truth_rows);
   selectValue("failure-mode", preset.failure_mode);
+  selectValue("projection-method", preset.feature_projection_method);
+  selectValue("color-column", preset.feature_color_column);
+  selectValue("feature-image-column", preset.feature_image_column);
+
+  if (preset.feature_max_rows != null) {
+    byId("max-rows").value = String(preset.feature_max_rows);
+  }
+  if (preset.feature_scale != null) {
+    byId("scale-features").checked = Boolean(preset.feature_scale);
+  }
+  byId("projection-method").dispatchEvent(new Event("change"));
 
   if (preset.threshold != null) {
     byId("threshold").value = String(preset.threshold);
@@ -66,6 +78,12 @@ function populateControls(schema, preserveFilters = false) {
   if (schema.prepared_gradcam_methods.length && !schema.gradcam_columns.length) {
     byId("gradcam-column").options[0].textContent = "Auto-detect prepared CAM";
   }
+  setOptions(
+    byId("gradcam-layer"),
+    schema.prepared_gradcam_layers || [],
+    schema.default_gradcam_layer || "",
+    false,
+  );
   setOptions(byId("subclass-column"), schema.categorical_columns, defaults.subclass_column);
   setOptions(byId("truth-column"), schema.columns, defaults.truth_column);
   setOptions(byId("prediction-column"), schema.numeric_columns, defaults.prediction_column);
@@ -75,6 +93,12 @@ function populateControls(schema, preserveFilters = false) {
   if (schema.prepared_gradcam_methods.length && !schema.gradcam_columns.length) {
     byId("feature-gradcam-column").options[0].textContent = "Auto-detect prepared CAM";
   }
+  setOptions(
+    byId("feature-gradcam-layer"),
+    schema.prepared_gradcam_layers || [],
+    schema.default_gradcam_layer || "",
+    false,
+  );
   byId("feature-count").textContent = schema.feature_columns.length
     ? `${schema.feature_columns.length.toLocaleString()} feature columns detected.`
     : "No numeric feature columns were detected.";
@@ -112,7 +136,7 @@ function activeView() {
 }
 
 function activateView(view, load = true) {
-  const supported = new Set(["review", "features", "comparison", "analysis"]);
+  const supported = new Set(["review", "features", "comparison", "analysis", "live"]);
   const selected = supported.has(view) ? view : "review";
   for (const tab of document.querySelectorAll(".tab")) {
     tab.classList.toggle("active", tab.dataset.view === selected);
@@ -121,6 +145,12 @@ function activateView(view, load = true) {
     byId(`${name === "features" ? "feature" : name}-controls`).classList.toggle("hidden", name !== selected);
     byId(`${name}-view`).classList.toggle("hidden", name !== selected);
   }
+  const isLive = selected === "live";
+  byId("source-field").classList.toggle("hidden", isLive);
+  document.querySelector(".dataset-filters").classList.toggle("hidden", isLive);
+  byId("source-status").textContent = isLive
+    ? "Live checkpoint inference"
+    : `${state.source.label} | ${state.schema.source.rows.toLocaleString()} rows`;
   if (selected === "features" && state.schema && state.source && !state.schema.feature_columns.length) {
     const featureSource = state.sources.find(source =>
       source.model_key === state.source.model_key && source.label.endsWith(" - features")
@@ -132,6 +162,9 @@ function activateView(view, load = true) {
     }
   }
   if (!load) return;
+  if (selected === "features" && state.schema?.review_preset?.feature_autorun) {
+    loadProjection(setBusy, showError);
+  }
   if (selected === "review") loadReview(setBusy, showError);
   if (selected === "comparison") loadComparison();
   if (selected === "analysis") loadAnalysis();
@@ -177,6 +210,7 @@ function bindSidebar() {
     byId("feature-controls"),
     byId("comparison-controls"),
     byId("analysis-controls"),
+    byId("live-controls"),
   ]) {
     form.addEventListener("submit", () => {
       if (isMobile()) setOpen(false);
@@ -213,6 +247,7 @@ async function start() {
   bindComparison(setBusy, showError);
   bindAnalysis(setBusy, showError);
   bindImageViewer();
+  bindLiveInference(setBusy, showError);
   bindNavigation();
   bindSidebar();
   byId("add-filter-column").addEventListener("change", event => {
@@ -236,6 +271,7 @@ async function start() {
     await Promise.all([
       configureComparison(state.sources, initialSource.id),
       configureAnalysis(state.sources, initialSource.id),
+      configureLiveInference(),
     ]);
     applyUrlState(parameters);
     const requestedView = parameters.get("view") || "review";

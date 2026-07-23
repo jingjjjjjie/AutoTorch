@@ -11,8 +11,9 @@ class FilterRequest(BaseModel):
     item_id_column: str = ""
     image_column: str = ""
     gradcam_column: str = ""
-    gradcam_method: Literal["gradcam", "gradcam++"] = "gradcam"
-    gradcam_target: Literal["fraud", "genuine"] = "fraud"
+    gradcam_method: Literal["gradcam", "gradcam++"] = "gradcam++"
+    gradcam_target: Literal["fraud", "genuine", "both"] = "fraud"
+    gradcam_layer: str = ""
     subclass_column: str = ""
     truth_column: str = ""
     prediction_column: str = ""
@@ -74,8 +75,10 @@ class ComparisonRequest(BaseModel):
     image_column_b: str = ""
     gradcam_column_a: str = ""
     gradcam_column_b: str = ""
-    gradcam_method: Literal["gradcam", "gradcam++"] = "gradcam"
-    gradcam_target: Literal["fraud", "genuine"] = "fraud"
+    gradcam_method: Literal["gradcam", "gradcam++"] = "gradcam++"
+    gradcam_target: Literal["fraud", "genuine", "both"] = "fraud"
+    gradcam_layer_a: str = ""
+    gradcam_layer_b: str = ""
     threshold_a: float = Field(default=0.5, ge=0.0, le=1.0)
     threshold_b: float = Field(default=0.5, ge=0.0, le=1.0)
     subclass_column: str = ""
@@ -146,6 +149,8 @@ class SchemaResponse(BaseModel):
     image_availability: dict[str, float]
     default_filter_columns: list[str]
     prepared_gradcam_methods: list[str]
+    prepared_gradcam_layers: list[str] = Field(default_factory=list)
+    default_gradcam_layer: str = ""
     review_preset: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -157,6 +162,9 @@ class RowResponse(BaseModel):
     values: dict[str, JsonValue]
     image_url: str = ""
     gradcam_url: str = ""
+    genuine_gradcam_url: str = ""
+    fraud_gradcam_url: str = ""
+    gradcam_layers: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class PageResponse(BaseModel):

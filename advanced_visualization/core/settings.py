@@ -15,6 +15,7 @@ SETTINGS_PATH = PACKAGE_ROOT / "settings.json"
 @dataclass
 class UserModelConfig:
     key: str = ""
+    data_dir: str = ""
     prediction_csv: str = ""
     feature_csv: str = ""
     artifact_dir: str = ""
@@ -33,7 +34,8 @@ class UserModelConfig:
     def from_dict(cls, payload: dict[str, Any]) -> "UserModelConfig":
         weights_epoch = payload.get("weights_epoch")
         return cls(
-            key=str(payload.get("key", "")),
+            key=str(payload.get("model_id", payload.get("key", ""))),
+            data_dir=str(payload.get("data_dir", "")),
             prediction_csv=str(payload.get("prediction_csv", "")),
             feature_csv=str(payload.get("feature_csv", "")),
             artifact_dir=str(payload.get("artifact_dir", "")),
@@ -54,6 +56,12 @@ class UserModelConfig:
         )
 
     def to_dict(self) -> dict[str, Any]:
+        if self.data_dir.strip():
+            return {
+                "model_id": self.key,
+                "data_dir": self.data_dir,
+                "enabled": self.enabled,
+            }
         return {
             "key": self.key,
             "prediction_csv": self.prediction_csv,
@@ -72,6 +80,10 @@ class UserModelConfig:
         }
 
     def resolved_checkpoint(self) -> Path | None:
+        if self.data_dir.strip() and self.key.strip():
+            from advanced_visualization.core.model_router import load_model_route
+
+            return load_model_route(self.key, self.data_dir).checkpoint
         if self.checkpoint.strip():
             return configured_path(self.checkpoint)
         if self.artifact_dir.strip() and self.weights_epoch is not None:
@@ -272,7 +284,11 @@ def configured_prediction_csv() -> Path | None:
 def configured_artifact_dirs() -> list[Path]:
     dirs: list[Path] = []
     for model in load_settings().models:
-        if model.enabled and model.artifact_dir.strip():
+        if model.enabled and model.data_dir.strip() and model.key.strip():
+            from advanced_visualization.core.model_router import load_model_route
+
+            dirs.append(load_model_route(model.key, model.data_dir).artifact_dir)
+        elif model.enabled and model.artifact_dir.strip():
             dirs.append(configured_path(model.artifact_dir))
     return dirs
 
@@ -282,6 +298,12 @@ def configured_model_sources() -> list[tuple[str, Path | None, Path | None]]:
     sources: list[tuple[str, Path | None, Path | None]] = []
     for model in settings.models:
         if not model.enabled:
+            continue
+        if model.data_dir.strip() and model.key.strip():
+            from advanced_visualization.core.model_router import load_model_route
+
+            route = load_model_route(model.key, model.data_dir)
+            sources.append((model.key, route.artifact_dir, route.prediction_data))
             continue
         artifact_dir = (
             configured_path(model.artifact_dir) if model.artifact_dir.strip() else None

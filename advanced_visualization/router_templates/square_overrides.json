@@ -1,0 +1,13 @@
+{
+  "prediction_column": "Ex8point2res1024largerbs_square_exp_pred_ori",
+  "review_preset": {
+    "image_column": "absolute_ori_path",
+    "prediction_column": "Ex8point2res1024largerbs_square_exp_pred_ori",
+    "truth_column": "label",
+    "subclass_column": "Recapture_Subclass",
+    "threshold": 0.01,
+    "truth_rows": "valid",
+    "failure_mode": "failures",
+    "image_mode": "original"
+  }
+}

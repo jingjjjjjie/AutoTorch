@@ -33,6 +33,7 @@ def prepared_gradcam(
     method: str = Query("gradcam", pattern=r"^(gradcam|gradcam\+\+)$"),
     max_side: int = Query(900, ge=0, le=4096),
     target: str = "fraud",
+    layer: str = "",
 ) -> Response:
     try:
         source = repository.source(source_id)
@@ -50,8 +51,11 @@ def prepared_gradcam(
         )
     if row_id < 0 or row_id >= len(frame):
         raise HTTPException(status_code=404, detail="Row does not exist.")
+    available_layers = set(schema_details.get("prepared_gradcam_layers", []))
+    if layer and layer not in available_layers:
+        raise HTTPException(status_code=400, detail="Unknown CAM layer for this model.")
     path = prepared_gradcam_path(
-        source, frame.iloc[row_id], image_column, method, target
+        source, frame.iloc[row_id], image_column, method, target, layer
     )
     if path is None:
         raise HTTPException(

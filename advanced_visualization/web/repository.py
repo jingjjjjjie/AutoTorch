@@ -19,6 +19,7 @@ from advanced_visualization.core.columns import (
 )
 from advanced_visualization.core.feature_data import FEATURE_PATTERN
 from advanced_visualization.core.images import valid_image
+from advanced_visualization.core.model_router import registered_model_routes, route_for_model
 from advanced_visualization.core.settings import configured_path, load_settings
 
 
@@ -90,6 +91,19 @@ class DatasetRepository:
                 )
             )
             seen.add(path.resolve())
+        for route in registered_model_routes().values():
+            if route.feature_data is None or route.feature_data.resolve() in seen:
+                continue
+            result.append(
+                DataSource(
+                    id=_source_id(route.feature_data, route.model_id),
+                    label=f"{route.model_id} - features",
+                    path=route.feature_data,
+                    model_key=route.model_id,
+                    artifact_dir=route.artifact_dir,
+                )
+            )
+            seen.add(route.feature_data.resolve())
         default_model_key = str(load_settings().review.get("default_model_key", ""))
         if default_model_key:
             result.sort(key=lambda source: source.model_key != default_model_key)
@@ -176,12 +190,26 @@ class DatasetRepository:
         public = frame.drop(columns="__row_id")
         columns = public.columns.tolist()
         settings = load_settings()
+        route = route_for_model(source.model_key)
         model = next(
             (item for item in settings.models if item.key == source.model_key), None
         )
-        defaults = infer_standard_columns(
-            public, model.prediction_column if model else ""
+        configured_prediction = (
+            route.columns.get("prediction", "")
+            if route is not None
+            else (model.prediction_column if model else "")
         )
+        defaults = infer_standard_columns(public, configured_prediction)
+        if route is not None:
+            for standard, target in (
+                ("item_id_column", "sample_id"),
+                ("truth_column", "truth"),
+                ("prediction_column", "prediction"),
+                ("subclass_column", "subclass"),
+            ):
+                column = route.columns.get(target, "")
+                if column in public.columns:
+                    defaults[standard] = column
         categorical = self._categorical_columns(public, features=set())
         images = image_path_columns(public)
         availability = {
@@ -196,7 +224,9 @@ class DatasetRepository:
         )
         gradcams = [column for column in images if EXPLANATION_PATTERN.search(column)]
         configured_image = (
-            model.image_column if model and model.image_column in images else ""
+            route.columns.get("image", "")
+            if route is not None
+            else (model.image_column if model and model.image_column in images else "")
         )
         inferred_image = defaults.get("image_column", "")
         if configured_image and availability.get(configured_image, 0) > 0:
@@ -217,16 +247,12 @@ class DatasetRepository:
             values = public[column].fillna("Missing").astype(str).unique()
             if len(values) <= 200:
                 categories[column] = sorted(values.tolist())
-        prepared_methods: list[str] = []
-        if gradcam_root and gradcam_root.is_dir():
-            for path in gradcam_root.glob("*.png"):
-                name = path.name.lower()
-                if "_gradcampp" in name and "gradcam++" not in prepared_methods:
-                    prepared_methods.append("gradcam++")
-                elif "_gradcam" in name and "gradcam" not in prepared_methods:
-                    prepared_methods.append("gradcam")
-                if len(prepared_methods) == 2:
-                    break
+        prepared_methods: list[str] = ["gradcam++"] if route and route.layers else []
+        prepared_layers = [layer.key for layer in route.layers] if route else []
+        default_layer = next(
+            (layer.key for layer in route.layers if layer.final),
+            prepared_layers[0] if prepared_layers else "",
+        ) if route else ""
         details = {
             "source": source,
             "columns": columns,
@@ -246,7 +272,13 @@ class DatasetRepository:
                 if column in categories
             ],
             "prepared_gradcam_methods": prepared_methods,
-            "review_preset": dict(model.review_preset) if model else {},
+            "prepared_gradcam_layers": prepared_layers,
+            "default_gradcam_layer": default_layer,
+            "review_preset": (
+                dict(route.review_preset)
+                if route is not None
+                else (dict(model.review_preset) if model else {})
+            ),
         }
         with self._lock:
             self._schema_cache[source_id] = (*signature, details)

@@ -1,5 +1,5 @@
 import { getSchema, getSources } from "./api.js";
-import { bindAnalysis, configureAnalysis, loadAnalysis } from "./analysis.js";
+import { bindAnalysis, configureAnalysis, loadAnalysis, selectAnalysisSource } from "./analysis.js";
 import { initializeCategoricalFilters, renderCategoricalFilters } from "./categorical-filters.js";
 import { bindComparison, configureComparison, loadComparison } from "./comparison.js";
 import { byId } from "./dom.js";
@@ -83,11 +83,48 @@ function populateControls(schema, preserveFilters = false) {
     schema.prepared_gradcam_layers || [],
     schema.default_gradcam_layer || "",
     false,
+    schema.prepared_gradcam_layer_labels || {},
   );
+  const hasIndividualCam = Boolean(
+    (schema.gradcam_columns || []).length
+    || (schema.prepared_gradcam_layers || []).length
+  );
+  const individualCamModes = [
+    "gradcam",
+    "both",
+    "original_genuine",
+    "side_by_side",
+    "original_both",
+  ];
+  for (const value of individualCamModes) {
+    byId("image-mode")
+      .querySelector(`[data-value="${value}"]`)
+      .classList.toggle("hidden", !hasIndividualCam);
+  }
+  for (const id of ["gradcam-column", "gradcam-method", "gradcam-layer", "gradcam-target"]) {
+    byId(id).closest("label").classList.toggle("hidden", !hasIndividualCam);
+  }
+  const montageButton = byId("image-mode").querySelector('[data-value="montage"]');
+  montageButton.classList.toggle("hidden", !schema.gradcam_montage_column);
+  const invalidMode = (
+    (!schema.gradcam_montage_column && state.imageMode === "montage")
+    || (!hasIndividualCam && individualCamModes.includes(state.imageMode))
+  );
+  if (invalidMode) {
+    state.imageMode = schema.gradcam_montage_column ? "montage" : "original";
+    for (const button of byId("image-mode").querySelectorAll("button")) {
+      button.classList.toggle("active", button.dataset.value === state.imageMode);
+    }
+  }
   setOptions(byId("subclass-column"), schema.categorical_columns, defaults.subclass_column);
   setOptions(byId("truth-column"), schema.columns, defaults.truth_column);
   setOptions(byId("prediction-column"), schema.numeric_columns, defaults.prediction_column);
   setOptions(byId("color-column"), schema.categorical_columns, defaults.subclass_column);
+  setOptions(
+    byId("feature-color-score"),
+    schema.numeric_columns,
+    defaults.prediction_column,
+  );
   setOptions(byId("feature-image-column"), schema.image_columns, defaults.image_column, true, imageLabels);
   setOptions(byId("feature-gradcam-column"), schema.gradcam_columns, schema.gradcam_columns[0] || "", true, imageLabels);
   if (schema.prepared_gradcam_methods.length && !schema.gradcam_columns.length) {
@@ -98,6 +135,7 @@ function populateControls(schema, preserveFilters = false) {
     schema.prepared_gradcam_layers || [],
     schema.default_gradcam_layer || "",
     false,
+    schema.prepared_gradcam_layer_labels || {},
   );
   byId("feature-count").textContent = schema.feature_columns.length
     ? `${schema.feature_columns.length.toLocaleString()} feature columns detected.`
@@ -167,7 +205,11 @@ function activateView(view, load = true) {
   }
   if (selected === "review") loadReview(setBusy, showError);
   if (selected === "comparison") loadComparison();
-  if (selected === "analysis") loadAnalysis();
+  if (selected === "analysis") {
+    selectAnalysisSource(state.source.id)
+      .then(loadAnalysis)
+      .catch(error => showError(error.message));
+  }
 }
 
 function bindNavigation() {

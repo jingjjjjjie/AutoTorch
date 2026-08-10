@@ -14,6 +14,7 @@ from advanced_visualization.core.config import (
     ModelRunConfig,
 )
 from advanced_visualization.core.settings import configured_model_sources, configured_prediction_csv
+from advanced_visualization.core.settings import configured_path, load_settings
 
 
 @dataclass(frozen=True)
@@ -117,6 +118,9 @@ def build_manifest(
 
 
 def default_csv_paths() -> list[Path]:
+    configured_datasets = _configured_prediction_datasets()
+    if configured_datasets:
+        return [path for _key, _label, path in configured_datasets]
     configured_paths = []
     for _model_key, artifact_dir, prediction_csv in configured_model_sources():
         if artifact_dir is not None:
@@ -150,6 +154,13 @@ def available_data_sources() -> list[dict[str, object]]:
         seen_prepared_paths.add(resolved)
         sources.append({"label": label, "path": resolved, "artifact_dir": artifact_dir, "model_key": model_key})
 
+    configured_datasets = _configured_prediction_datasets()
+    if configured_datasets:
+        for key, label, path in configured_datasets:
+            if path.is_file():
+                append_prepared(label, path, None, key)
+        return sources
+
     for model_key, artifact_dir, prediction_csv in configured_model_sources():
         label = model_key
         manifest = load_manifest(artifact_dir) if artifact_dir is not None else None
@@ -176,6 +187,18 @@ def available_data_sources() -> list[dict[str, object]]:
     if configured_csv and configured_csv.exists() and not added_model_source:
         sources.append({"label": f"{configured_csv.name} - source", "path": configured_csv, "artifact_dir": None, "model_key": ""})
     return sources
+
+
+def _configured_prediction_datasets() -> list[tuple[str, str, Path]]:
+    datasets: list[tuple[str, str, Path]] = []
+    settings = load_settings()
+    for item in settings.prediction_datasets:
+        key = item.get("key", "").strip()
+        label = item.get("label", "").strip()
+        raw_path = item.get("path", "").strip()
+        if key and raw_path:
+            datasets.append((key, label or key, configured_path(raw_path)))
+    return datasets
 
 
 def read_csv(path: Path) -> pd.DataFrame:

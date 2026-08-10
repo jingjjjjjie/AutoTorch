@@ -55,7 +55,12 @@ def configured_model_runs() -> dict[str, ModelRunConfig]:
         if model.enabled and model.key.strip() and model.data_dir.strip():
             from advanced_visualization.core.model_router import load_model_route
 
-            route = load_model_route(model.key, model.data_dir)
+            try:
+                route = load_model_route(model.key, model.data_dir)
+            except FileNotFoundError:
+                # Output-only registrations can temporarily disappear during a
+                # clean workspace rebuild; do not hide unrelated model runs.
+                continue
             if route.framework != "pytorch" or route.checkpoint is None:
                 continue
             runs[model.key] = ModelRunConfig(

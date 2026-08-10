@@ -43,10 +43,7 @@ from advanced_visualization.tensorflow_service.app import (  # noqa: E402
 
 def _valid_image(raw: str) -> Path | None:
     path = Path(str(raw)).expanduser()
-    candidates = [path]
-    if str(path).startswith("/routine_data/"):
-        candidates.append(Path("/mnt5") / str(path).lstrip("/"))
-    return next((candidate for candidate in candidates if candidate.is_file()), None)
+    return path if path.is_file() else None
 
 
 def _digest(path: Path) -> str:

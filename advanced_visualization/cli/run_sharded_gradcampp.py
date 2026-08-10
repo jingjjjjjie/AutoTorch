@@ -55,6 +55,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--allocator-limit-mib", type=int, default=6000)
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--retry-delay", type=int, default=60)
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Regenerate existing overlays. By default only missing overlays are made.",
+    )
+    parser.add_argument(
+        "--clean",
+        action="store_true",
+        help="Delete selected models' existing overlays before starting.",
+    )
     return parser.parse_args()
 
 
@@ -141,6 +151,7 @@ def _command(
     num_shards: int,
     allocator_limit_mib: int,
     batch_size: int,
+    overwrite: bool,
 ) -> tuple[list[str], dict[str, str]]:
     environment = os.environ.copy()
     environment.update(
@@ -160,8 +171,9 @@ def _command(
         str(num_shards),
         "--shard-index",
         str(task.shard_index),
-        "--overwrite",
     ]
+    if overwrite:
+        shard_args.append("--overwrite")
     if task.framework == "pytorch":
         module = "advanced_visualization.cli.generate_registered_gradcam"
         batch_args = []
@@ -236,12 +248,13 @@ def main() -> None:
     if not routes:
         raise SystemExit("No router-registered models selected.")
 
-    print("CLEAN START", flush=True)
-    _clean(routes)
+    if args.clean:
+        print("CLEAN START", flush=True)
+        _clean(routes)
+        print("CLEAN DONE", flush=True)
     for route in routes:
         initialize_artifact(route)
     LOG_ROOT.mkdir(parents=True, exist_ok=True)
-    print("CLEAN DONE", flush=True)
 
     tasks: queue.Queue[Task] = queue.Queue()
     total_tasks = 0
@@ -288,6 +301,7 @@ def main() -> None:
                     num_shards,
                     args.allocator_limit_mib,
                     args.batch_size,
+                    args.overwrite,
                 )
                 log_dir = LOG_ROOT / task.model_id / task.layer
                 log_dir.mkdir(parents=True, exist_ok=True)
@@ -325,7 +339,6 @@ def main() -> None:
                     valid_state = (
                         result.get("complete") is True
                         and result.get("failed") == 0
-                        and result.get("skipped") == 0
                     )
                 if valid_state:
                     with lock:

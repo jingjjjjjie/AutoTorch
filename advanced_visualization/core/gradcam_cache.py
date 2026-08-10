@@ -9,7 +9,7 @@ from advanced_visualization.core.config import (
     DEFAULT_GRADCAM_ROOT,
     gradcam_artifact_root,
 )
-from advanced_visualization.core.images import image_cache_digest, valid_image
+from advanced_visualization.core.images import image_cache_digests, valid_image
 
 
 def gradcam_cache_candidates(
@@ -20,50 +20,73 @@ def gradcam_cache_candidates(
     target: str = "fraud",
     layer: str = "",
 ) -> list[Path]:
-    digest = image_cache_digest(image_path)
-    if not digest:
+    digests = image_cache_digests(image_path)
+    if not digests:
         return []
     space_marker = "_model_input" if space == "model-input" else ""
     target_marker = "_genuine" if target == "genuine" else ""
-    nested = (
-        root / layer / target / f"{digest}_gradcampp_logit.webp"
-        if layer and method in {"gradcam++", "gradcampp", ""}
-        else None
-    )
     if method == "gradcam":
         return [
-            root / f"{digest}_gradcam{target_marker}_logit{space_marker}.png",
-            root / f"{digest}_gradcam{target_marker}{space_marker}.png",
+            candidate
+            for digest in digests
+            for candidate in (
+                root / f"{digest}_gradcam{target_marker}_logit{space_marker}.png",
+                root / f"{digest}_gradcam{target_marker}{space_marker}.png",
+            )
         ]
     if method in {"gradcam++", "gradcampp"}:
-        candidates = [
-            root / f"{digest}_gradcampp{target_marker}_logit{space_marker}.png",
-            root / f"{digest}_gradcampp{target_marker}{space_marker}.png",
+        return [
+            candidate
+            for digest in digests
+            for candidate in (
+                *(
+                    (root / layer / target / f"{digest}_gradcampp_logit.webp",)
+                    if layer
+                    else ()
+                ),
+                root / f"{digest}_gradcampp{target_marker}_logit{space_marker}.png",
+                root / f"{digest}_gradcampp{target_marker}{space_marker}.png",
+            )
         ]
-        return ([nested] if nested is not None else []) + candidates
     if target == "genuine":
-        candidates = [
-            root / f"{digest}_gradcam_genuine_logit.png",
-            root / f"{digest}_gradcam_genuine_logit_model_input.png",
-            root / f"{digest}_gradcampp_genuine_logit.png",
-            root / f"{digest}_gradcampp_genuine_logit_model_input.png",
-            root / f"{digest}_gradcam_genuine.png",
-            root / f"{digest}_gradcam_genuine_model_input.png",
-            root / f"{digest}_gradcampp_genuine.png",
-            root / f"{digest}_gradcampp_genuine_model_input.png",
+        return [
+            candidate
+            for digest in digests
+            for candidate in (
+                *(
+                    (root / layer / target / f"{digest}_gradcampp_logit.webp",)
+                    if layer
+                    else ()
+                ),
+                root / f"{digest}_gradcam_genuine_logit.png",
+                root / f"{digest}_gradcam_genuine_logit_model_input.png",
+                root / f"{digest}_gradcampp_genuine_logit.png",
+                root / f"{digest}_gradcampp_genuine_logit_model_input.png",
+                root / f"{digest}_gradcam_genuine.png",
+                root / f"{digest}_gradcam_genuine_model_input.png",
+                root / f"{digest}_gradcampp_genuine.png",
+                root / f"{digest}_gradcampp_genuine_model_input.png",
+            )
         ]
-        return ([nested] if nested is not None else []) + candidates
-    candidates = [
-        root / f"{digest}_gradcam_logit.png",
-        root / f"{digest}_gradcam_logit_model_input.png",
-        root / f"{digest}_gradcampp_logit.png",
-        root / f"{digest}_gradcampp_logit_model_input.png",
-        root / f"{digest}_gradcam.png",
-        root / f"{digest}_gradcam_model_input.png",
-        root / f"{digest}_gradcampp.png",
-        root / f"{digest}_gradcampp_model_input.png",
+    return [
+        candidate
+        for digest in digests
+        for candidate in (
+            *(
+                (root / layer / target / f"{digest}_gradcampp_logit.webp",)
+                if layer
+                else ()
+            ),
+            root / f"{digest}_gradcam_logit.png",
+            root / f"{digest}_gradcam_logit_model_input.png",
+            root / f"{digest}_gradcampp_logit.png",
+            root / f"{digest}_gradcampp_logit_model_input.png",
+            root / f"{digest}_gradcam.png",
+            root / f"{digest}_gradcam_model_input.png",
+            root / f"{digest}_gradcampp.png",
+            root / f"{digest}_gradcampp_model_input.png",
+        )
     ]
-    return ([nested] if nested is not None else []) + candidates
 
 
 GRADCAM_PRIORITY = (

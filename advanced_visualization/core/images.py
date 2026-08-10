@@ -32,15 +32,10 @@ def valid_image(path_value) -> Optional[Path]:
 
 
 def image_path_candidates(path_value) -> list[Path]:
-    """Return configured path plus known mount aliases, in preference order."""
+    """Return the configured image path."""
     if pd.isna(path_value):
         return []
-    path = Path(str(path_value)).expanduser()
-    candidates = [path]
-    raw = str(path)
-    if raw.startswith("/routine_data/"):
-        candidates.append(Path("/mnt5") / raw.lstrip("/"))
-    return candidates
+    return [Path(str(path_value)).expanduser()]
 
 
 def _image_signature(path_value) -> Optional[tuple[str, int, int]]:
@@ -115,7 +110,9 @@ def image_path_to_data_uri(
     return _image_path_to_data_uri_cached(*signature, int(max_side), int(quality))
 
 
-def _cached_image_cache_digest(raw_path: str) -> Optional[str]:
+def _cached_image_cache_digest(
+    raw_path: str, identity_path: str = ""
+) -> Optional[str]:
     image_path = Path(raw_path).expanduser()
     if not image_path.is_file() or image_path.suffix.lower() not in IMAGE_EXTENSIONS:
         return None
@@ -124,8 +121,23 @@ def _cached_image_cache_digest(raw_path: str) -> Optional[str]:
         stat = resolved.stat()
     except OSError:
         return None
-    stamp = f"{resolved}:{stat.st_mtime_ns}:{stat.st_size}"
+    identity = identity_path or str(resolved)
+    stamp = f"{identity}:{stat.st_mtime_ns}:{stat.st_size}"
     return hashlib.sha1(stamp.encode("utf-8")).hexdigest()[:18]
+
+
+def _cache_path_aliases() -> list[tuple[Path, Path]]:
+    aliases = []
+    for raw_mapping in os.environ.get(
+        "AUTOTORCH_IMAGE_CACHE_PATH_ALIASES", ""
+    ).split(","):
+        source, separator, target = raw_mapping.strip().partition("=")
+        if not separator or not source.strip() or not target.strip():
+            continue
+        aliases.append(
+            (Path(source.strip()).expanduser(), Path(target.strip()).expanduser())
+        )
+    return aliases
 
 
 def image_cache_digests(path_value) -> list[str]:
@@ -136,9 +148,18 @@ def image_cache_digests(path_value) -> list[str]:
         digest = _cached_image_cache_digest(str(path))
         if digest and digest not in digests:
             digests.append(digest)
+        for source, target in _cache_path_aliases():
+            try:
+                relative = path.expanduser().relative_to(source)
+            except ValueError:
+                continue
+            alias_identity = str(target / relative)
+            alias_digest = _cached_image_cache_digest(str(path), alias_identity)
+            if alias_digest and alias_digest not in digests:
+                digests.append(alias_digest)
     return digests
 
 
 def image_cache_digest(path_value) -> Optional[str]:
     digests = image_cache_digests(path_value)
-    return digests[-1] if digests else None
+    return digests[0] if digests else None

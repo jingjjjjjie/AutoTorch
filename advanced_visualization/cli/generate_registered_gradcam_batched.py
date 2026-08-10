@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import gc
 import json
+import os
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pandas as pd
@@ -79,53 +81,89 @@ def generate(
         f"shard-{shard_index:03d}-of-{num_shards:03d}.json"
     )
     generated = skipped = failed = oom_splits = processed = 0
+    safe_compute_batch_size = batch_size
+    save_workers = max(1, int(os.environ.get("AUTOTORCH_GRADCAM_SAVE_WORKERS", "14")))
+    save_pool = ThreadPoolExecutor(
+        max_workers=save_workers,
+        thread_name_prefix="gradcam-webp",
+    )
+    pending_save_jobs = []
     progress = tqdm(
         total=len(image_paths),
         desc=f"{model_id}:{layer.key}:shard-{shard_index:03d}:batch-{batch_size}",
         unit="img",
     )
 
+    def settle_save_job(job) -> None:
+        nonlocal generated, failed
+        image_path, target, future = job
+        try:
+            future.result()
+            generated += 1
+        except Exception as exc:
+            failed += 1
+            progress.write(
+                f"{model_id}:{layer.key}: {image_path}: {target}: "
+                f"{type(exc).__name__}: {exc}"
+            )
+
+    def collect_save_jobs(*, wait: bool) -> None:
+        remaining = []
+        for job in pending_save_jobs:
+            if wait or job[2].done():
+                settle_save_job(job)
+            else:
+                remaining.append(job)
+        pending_save_jobs[:] = remaining
+
     def compute(items):
-        nonlocal generated, failed, oom_splits
+        nonlocal generated, failed, oom_splits, safe_compute_batch_size
         if not items:
             return None
+        if len(items) > safe_compute_batch_size:
+            return tuple(
+                items[start : start + safe_compute_batch_size]
+                for start in range(0, len(items), safe_compute_batch_size)
+            )
         try:
             stacked = torch.stack([item[2] for item in items])
             cams = {}
-            for target in TARGETS:
-                if not any(target in item[4] for item in items):
-                    continue
-                captured = {}
-                inputs = scores = objective = None
+            needed_targets = [
+                target
+                for target in TARGETS
+                if any(target in item[4] for item in items)
+            ]
+            captured = {}
+            inputs = scores = activation = gradient = None
 
-                def forward_hook(_module, _inputs, output):
-                    captured["activation"] = output
+            def forward_hook(_module, _inputs, output):
+                captured["activation"] = output
 
-                def backward_hook(_module, _grad_input, grad_output):
-                    captured["gradient"] = grad_output[0]
-
-                forward_handle = target_layer.register_forward_hook(forward_hook)
-                backward_handle = target_layer.register_full_backward_hook(backward_hook)
-                try:
-                    inputs = stacked.to(bundle.device).requires_grad_(True)
-                    model.zero_grad(set_to_none=True)
-                    with torch.enable_grad():
-                        scores = engine.score(model, inputs)
-                        objective = scores.sum()
-                        if target == "genuine":
-                            objective = -objective
-                        objective.backward()
+            forward_handle = target_layer.register_forward_hook(forward_hook)
+            try:
+                inputs = stacked.to(bundle.device).requires_grad_(True)
+                model.zero_grad(set_to_none=True)
+                with torch.enable_grad():
+                    scores = engine.score(model, inputs)
+                    activation = captured["activation"]
+                    gradient = torch.autograd.grad(scores.sum(), activation)[0]
+                detached_activation = activation.detach()
+                detached_gradient = gradient.detach()
+                for target in needed_targets:
+                    target_gradient = (
+                        -detached_gradient if target == "genuine" else detached_gradient
+                    )
                     cams[target] = engine.compute_cam(
-                        captured["activation"].detach(),
-                        captured["gradient"].detach(),
+                        detached_activation,
+                        target_gradient,
                         method="gradcam++",
                     ).float().cpu()
-                finally:
-                    forward_handle.remove()
-                    backward_handle.remove()
-                    captured.clear()
-                    inputs = scores = objective = None
+            finally:
+                forward_handle.remove()
+                captured.clear()
+                inputs = scores = activation = gradient = None
 
+            save_jobs = []
             for item_index, (image_path, base, _tensor, outputs, missing) in enumerate(items):
                 for target in missing:
                     try:
@@ -139,14 +177,29 @@ def generate(
                         resized = (resized - resized.min()) / (
                             resized.max() - resized.min() + 1e-8
                         )
-                        _save_webp(base, resized.numpy().copy(), outputs[target])
-                        generated += 1
+                        save_jobs.append(
+                            (
+                                image_path,
+                                target,
+                                save_pool.submit(
+                                    _save_webp,
+                                    base,
+                                    resized.numpy().copy(),
+                                    outputs[target],
+                                ),
+                            )
+                        )
                     except Exception as exc:
                         failed += 1
                         progress.write(
                             f"{model_id}:{layer.key}: {image_path}: {target}: "
                             f"{type(exc).__name__}: {exc}"
                         )
+            pending_save_jobs.extend(save_jobs)
+            collect_save_jobs(wait=False)
+            max_pending_saves = save_workers * 4
+            while len(pending_save_jobs) > max_pending_saves:
+                settle_save_job(pending_save_jobs.pop(0))
         except torch.OutOfMemoryError:
             if len(items) == 1:
                 failed += len(items[0][4])
@@ -156,8 +209,9 @@ def generate(
                 )
                 return ()
             oom_splits += 1
-            midpoint = len(items) // 2
-            return (items[:midpoint], items[midpoint:])
+            reduced_size = len(items) - 1 if len(items) > 2 else 1
+            safe_compute_batch_size = min(safe_compute_batch_size, reduced_size)
+            return (items[:reduced_size], items[reduced_size:])
 
     next_state_at = 100
     for start in range(0, len(image_paths), batch_size):
@@ -220,6 +274,7 @@ def generate(
                     "skipped": skipped,
                     "failed": failed,
                     "oom_splits": oom_splits,
+                    "effective_batch_size": safe_compute_batch_size,
                     "invalid_sources": invalid_sources,
                     "torch_peak_reserved_mib": peak_mb,
                     "complete": False,
@@ -228,7 +283,15 @@ def generate(
             while next_state_at <= processed:
                 next_state_at += 100
 
+    collect_save_jobs(wait=True)
+    progress.set_postfix(
+        generated=generated,
+        skipped=skipped,
+        failed=failed,
+        oom_splits=oom_splits,
+    )
     progress.close()
+    save_pool.shutdown()
     peak_mb = round(torch.cuda.max_memory_reserved(0) / 1024 / 1024, 1)
     result = {
         "model_id": model_id,
@@ -242,6 +305,7 @@ def generate(
         "skipped": skipped,
         "failed": failed,
         "oom_splits": oom_splits,
+        "effective_batch_size": safe_compute_batch_size,
         "invalid_sources": invalid_sources,
         "torch_peak_reserved_mib": peak_mb,
         "complete": True,

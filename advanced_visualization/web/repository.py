@@ -20,7 +20,7 @@ from advanced_visualization.core.columns import (
 from advanced_visualization.core.feature_data import FEATURE_PATTERN
 from advanced_visualization.core.images import valid_image
 from advanced_visualization.core.model_router import registered_model_routes, route_for_model
-from advanced_visualization.core.settings import configured_path, load_settings
+from advanced_visualization.core.settings import SETTINGS_PATH, configured_path, load_settings
 
 
 EXPLANATION_PATTERN = re.compile(
@@ -51,7 +51,7 @@ class DatasetRepository:
         self._review_cache: OrderedDict[str, tuple[int, int, pd.DataFrame]] = (
             OrderedDict()
         )
-        self._schema_cache: dict[str, tuple[int, int, int, dict]] = {}
+        self._schema_cache: dict[str, tuple[int, int, int, int, int, dict]] = {}
         self._lock = threading.RLock()
 
     def sources(self) -> list[DataSource]:
@@ -105,8 +105,12 @@ class DatasetRepository:
             )
             seen.add(route.feature_data.resolve())
         default_model_key = str(load_settings().review.get("default_model_key", ""))
-        if default_model_key:
-            result.sort(key=lambda source: source.model_key != default_model_key)
+        result.sort(
+            key=lambda source: (
+                source.label.endswith(" - features"),
+                bool(default_model_key) and source.model_key != default_model_key,
+            )
+        )
         return result
 
     def source(self, source_id: str) -> DataSource:
@@ -176,16 +180,35 @@ class DatasetRepository:
         frame = self.review_dataframe(source_id)
         stat = source.path.stat()
         gradcam_root = source.artifact_dir / "gradcam" if source.artifact_dir else None
+        flat_artifacts = (
+            [
+                child
+                for child in gradcam_root.iterdir()
+                if child.is_file() and child.suffix.lower() in {".png", ".webp"}
+            ]
+            if gradcam_root and gradcam_root.is_dir()
+            else []
+        )
         artifact_modified_ns = (
             gradcam_root.stat().st_mtime_ns
             if gradcam_root and gradcam_root.is_dir()
             else 0
         )
-        signature = (stat.st_mtime_ns, stat.st_size, artifact_modified_ns)
+        flat_artifact_count = len(flat_artifacts)
+        settings_modified_ns = (
+            SETTINGS_PATH.stat().st_mtime_ns if SETTINGS_PATH.is_file() else 0
+        )
+        signature = (
+            stat.st_mtime_ns,
+            stat.st_size,
+            artifact_modified_ns,
+            flat_artifact_count,
+            settings_modified_ns,
+        )
         with self._lock:
             cached = self._schema_cache.get(source_id)
-            if cached and cached[:3] == signature:
-                return cached[3]
+            if cached and cached[:5] == signature:
+                return cached[5]
 
         public = frame.drop(columns="__row_id")
         columns = public.columns.tolist()
@@ -222,7 +245,27 @@ class DatasetRepository:
                 column,
             )
         )
-        gradcams = [column for column in images if EXPLANATION_PATTERN.search(column)]
+        inferred_montages = [
+            column for column in images if "layer_montage" in column.lower()
+        ]
+        configured_montage = (
+            route.gradcam_montage_column
+            if route and route.gradcam_montage_column in images
+            else ""
+        )
+        montage_column = configured_montage or next(
+            (
+                column
+                for column in inferred_montages
+                if availability.get(column, 0) > 0
+            ),
+            "",
+        )
+        gradcams = [
+            column
+            for column in images
+            if EXPLANATION_PATTERN.search(column) and column not in inferred_montages
+        ]
         configured_image = (
             route.columns.get("image", "")
             if route is not None
@@ -247,12 +290,47 @@ class DatasetRepository:
             values = public[column].fillna("Missing").astype(str).unique()
             if len(values) <= 200:
                 categories[column] = sorted(values.tolist())
-        prepared_methods: list[str] = ["gradcam++"] if route and route.layers else []
-        prepared_layers = [layer.key for layer in route.layers] if route else []
+        route_layer_keys = [layer.key for layer in route.layers] if route else []
+        configured_layers = route.prepared_gradcam_layers if route else None
+        prepared_layers = (
+            [
+                layer
+                for layer in configured_layers
+                if layer in route_layer_keys
+            ]
+            if configured_layers is not None
+            else route_layer_keys
+        )
+        prepared_methods: list[str] = ["gradcam++"] if prepared_layers else []
+        if not prepared_methods:
+            artifact_names = [path.name.lower() for path in flat_artifacts]
+            if any("_gradcam" in name and "_gradcampp" not in name for name in artifact_names):
+                prepared_methods.append("gradcam")
+            if any("_gradcampp" in name for name in artifact_names):
+                prepared_methods.append("gradcam++")
         default_layer = next(
-            (layer.key for layer in route.layers if layer.final),
+            (
+                layer.key
+                for layer in route.layers
+                if layer.final and layer.key in prepared_layers
+            ),
             prepared_layers[0] if prepared_layers else "",
         ) if route else ""
+        layer_labels = {
+            layer.key: layer.label
+            for layer in route.layers
+            if layer.key in prepared_layers
+        } if route else {}
+        montage_layers = [
+            layer
+            for layer in (route.gradcam_montage_layers if route else ())
+            if layer in route_layer_keys
+        ]
+        montage_layer_labels = {
+            layer.key: layer.label
+            for layer in route.layers
+            if layer.key in montage_layers
+        } if route else {}
         details = {
             "source": source,
             "columns": columns,
@@ -262,6 +340,9 @@ class DatasetRepository:
             "categorical_columns": categorical,
             "image_columns": images,
             "gradcam_columns": gradcams,
+            "gradcam_montage_column": montage_column,
+            "gradcam_montage_layers": montage_layers,
+            "gradcam_montage_layer_labels": montage_layer_labels,
             "feature_columns": features,
             "defaults": defaults,
             "categories": categories,
@@ -273,6 +354,7 @@ class DatasetRepository:
             ],
             "prepared_gradcam_methods": prepared_methods,
             "prepared_gradcam_layers": prepared_layers,
+            "prepared_gradcam_layer_labels": layer_labels,
             "default_gradcam_layer": default_layer,
             "review_preset": (
                 dict(route.review_preset)

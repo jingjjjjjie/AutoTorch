@@ -40,7 +40,9 @@ class BranchConfig:
     key: str
     label: str
     checkpoint: Path
+    branch: str
     image_size: int = DEFAULT_IMAGE_SIZE
+    threshold: float = 0.5
     layers: Tuple[Tuple[str, str, str], ...] = ()
 
 
@@ -55,7 +57,9 @@ def _branch_configs() -> Dict[str, BranchConfig]:
             key=route.model_id,
             label=f"{route.model_name} · {route.branch or route.model_id}",
             checkpoint=route.checkpoint,
+            branch=route.branch,
             image_size=route.image_size or DEFAULT_IMAGE_SIZE,
+            threshold=float(route.review_preset.get("threshold", 0.5)),
             layers=tuple(
                 (layer.module, layer.label, layer.key) for layer in route.layers
             ),
@@ -218,7 +222,7 @@ class VanSmallService:
         elapsed_ms = round((time.perf_counter() - started) * 1000)
         return {
             "model_key": config.key,
-            "branch": "crop" if config.key.endswith("_crop") else "ori",
+            "branch": config.branch,
             "fraud_probability": fraud_probability,
             "genuine_probability": 1.0 - fraud_probability,
             "logit": raw_logit,
@@ -252,10 +256,10 @@ def models() -> list:
             "label": config.label,
             "model_name": "vansmall",
             "framework": "tensorflow",
-            "branch": "crop" if config.key.endswith("_crop") else "ori",
+            "branch": config.branch,
             "image_size": config.image_size,
             "available": config.checkpoint.is_file(),
-            "threshold": 0.5,
+            "threshold": config.threshold,
             "layers": [label for _name, label, _key in config.layers],
         }
         for config in _branch_configs().values()

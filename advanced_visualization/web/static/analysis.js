@@ -105,9 +105,14 @@ async function loadSchema(sourceId) {
 }
 
 export async function configureAnalysis(sources, primarySourceId) {
-  const notebookSource = sources.find(source => source.path.endsWith("/joined_predictions.csv"));
-  const sourceId = notebookSource?.id || primarySourceId;
-  sourceSelectOptions(byId("analysis-source"), sources, sourceId);
+  sourceSelectOptions(byId("analysis-source"), sources, primarySourceId);
+  await selectAnalysisSource(primarySourceId);
+}
+
+export async function selectAnalysisSource(sourceId) {
+  const select = byId("analysis-source");
+  if (![...select.options].some(option => option.value === sourceId)) return;
+  select.value = sourceId;
   await loadSchema(sourceId);
 }
 

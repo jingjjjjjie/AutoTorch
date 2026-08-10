@@ -45,6 +45,7 @@ class ProjectionRequest(BaseModel):
     feature_columns: list[str] = Field(default_factory=list)
     item_id_column: str = ""
     color_column: str = ""
+    color_value_column: str = ""
     categorical_filters: dict[str, list[str]] = Field(default_factory=dict)
     scale: bool = True
     max_rows: int = Field(default=5000, ge=3, le=50000)
@@ -143,6 +144,9 @@ class SchemaResponse(BaseModel):
     categorical_columns: list[str]
     image_columns: list[str]
     gradcam_columns: list[str]
+    gradcam_montage_column: str = ""
+    gradcam_montage_layers: list[str] = Field(default_factory=list)
+    gradcam_montage_layer_labels: dict[str, str] = Field(default_factory=dict)
     feature_columns: list[str]
     defaults: dict[str, str]
     categories: dict[str, list[str]]
@@ -150,6 +154,7 @@ class SchemaResponse(BaseModel):
     default_filter_columns: list[str]
     prepared_gradcam_methods: list[str]
     prepared_gradcam_layers: list[str] = Field(default_factory=list)
+    prepared_gradcam_layer_labels: dict[str, str] = Field(default_factory=dict)
     default_gradcam_layer: str = ""
     review_preset: dict[str, Any] = Field(default_factory=dict)
 
@@ -165,6 +170,7 @@ class RowResponse(BaseModel):
     genuine_gradcam_url: str = ""
     fraud_gradcam_url: str = ""
     gradcam_layers: list[dict[str, Any]] = Field(default_factory=list)
+    montage_url: str = ""
 
 
 class PageResponse(BaseModel):

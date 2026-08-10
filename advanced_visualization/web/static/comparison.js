@@ -20,6 +20,11 @@ let pages = 1;
 let setBusyCallback = () => {};
 let showErrorCallback = () => {};
 
+function updateGalleryColumns() {
+  const columns = byId("comparison-columns").value === "1" ? "1" : "2";
+  byId("comparison-gallery").style.setProperty("--comparison-columns", columns);
+}
+
 const sideIds = side => ({
   item: `comparison-item-${side}`,
   truth: `comparison-truth-${side}`,
@@ -178,21 +183,40 @@ function renderRows(rows) {
       .map(([column, value]) => `${escapeText(column)}: ${escapeText(value)}`)
       .join(" · ");
     const target = byId("comparison-gradcam-target").value;
-    const camPanes = target === "both"
-      ? imagePane(row.a_genuine_gradcam_url, "A Genuine")
-        + imagePane(row.a_fraud_gradcam_url, "A Fraud")
-        + imagePane(row.b_genuine_gradcam_url, "B Genuine")
-        + imagePane(row.b_fraud_gradcam_url, "B Fraud")
-      : (row.a_gradcam_url || row.b_gradcam_url
-        ? imagePane(row.a_gradcam_url, `A ${target}`) + imagePane(row.b_gradcam_url, `B ${target}`)
-        : "");
+    const targetLabel = target === "genuine" ? "Genuine" : "Fraud";
+    const modelImages = (side, originalUrl, gradcamUrl, genuineUrl, fraudUrl) => {
+      const camPanes = target === "both"
+        ? imagePane(genuineUrl, `${side} Genuine Grad-CAM`)
+          + imagePane(fraudUrl, `${side} Fraud Grad-CAM`)
+        : imagePane(gradcamUrl, `${side} ${targetLabel} Grad-CAM`);
+      return `<section class="comparison-model-images">
+        <strong class="comparison-model-label">Model ${side}</strong>
+        <div class="comparison-model-panes">
+          ${imagePane(originalUrl, `${side} original`)}
+          ${camPanes}
+        </div>
+      </section>`;
+    };
     return `<article class="comparison-card">
       <div class="comparison-card-heading">
         <div><strong>${escapeText(row.item_id)}${row.occurrence ? ` · occurrence ${row.occurrence + 1}` : ""}</strong><span>${metadata}</span></div>
         <span class="status ${escapeText(row.outcome.replaceAll("_", "-"))}">${escapeText(row.outcome.replaceAll("_", " "))}</span>
       </div>
       <div class="comparison-images">
-        ${imagePane(row.a_image_url, "A original")}${imagePane(row.b_image_url, "B original")}${camPanes}
+        ${modelImages(
+          "A",
+          row.a_image_url,
+          row.a_gradcam_url,
+          row.a_genuine_gradcam_url,
+          row.a_fraud_gradcam_url,
+        )}
+        ${modelImages(
+          "B",
+          row.b_image_url,
+          row.b_gradcam_url,
+          row.b_genuine_gradcam_url,
+          row.b_fraud_gradcam_url,
+        )}
       </div>
       <div class="comparison-scores">
         <span>A <strong>${formatScore(row.a_score)}</strong> · ${escapeText(row.a_failure_type)}</span>
@@ -242,6 +266,7 @@ function detachedViewer(side) {
 export function bindComparison(setBusy, showError) {
   setBusyCallback = setBusy;
   showErrorCallback = showError;
+  updateGalleryColumns();
   byId("comparison-controls").addEventListener("submit", event => {
     event.preventDefault();
     page = 1;
@@ -269,6 +294,7 @@ export function bindComparison(setBusy, showError) {
     page = Math.min(pages, page + 1);
     loadComparison();
   });
+  byId("comparison-columns").addEventListener("change", updateGalleryColumns);
   byId("comparison-matrix").addEventListener("click", event => {
     const cell = event.target.closest("[data-outcome]");
     if (!cell) return;

@@ -156,6 +156,9 @@ body:has(.projection-layout.fullscreen) #plot-fullscreen { position: fixed; top:
 .legend-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .legend-count { color: var(--muted); font-variant-numeric: tabular-nums; }
 .legend-swatch { width: 9px; height: 9px; border-radius: 50%; }
+.heatmap-legend { display: grid; grid-template-columns: auto minmax(180px, 420px) auto; align-items: center; gap: 8px; width: min(100%, 520px); min-height: 28px; }
+.heatmap-gradient { height: 10px; border: 1px solid var(--line); border-radius: 3px; background: linear-gradient(90deg, #30123b 0%, #466be3 24%, #1ae4b6 48%, #f9e721 72%, #d7191c 100%); }
+.heatmap-endpoint { color: var(--muted); font-variant-numeric: tabular-nums; }
 .outcome-matrix { margin-bottom: 14px; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
 .matrix-heading { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
 .matrix-heading span { color: var(--muted); font-size: 11px; }
@@ -165,13 +168,19 @@ body:has(.projection-layout.fullscreen) #plot-fullscreen { position: fixed; top:
 .outcome-cell:hover, .outcome-cell.active { border-color: var(--accent); background: var(--accent-dark); }
 .outcome-cell strong { font-size: 18px; }
 .outcome-cell span { color: var(--muted); font-size: 11px; }
-.comparison-gallery, .analysis-gallery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.comparison-gallery { display: grid; grid-template-columns: repeat(var(--comparison-columns, 2), minmax(0, 1fr)); gap: 10px; }
+.analysis-gallery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .comparison-card, .analysis-card { min-width: 0; overflow: hidden; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
 .comparison-card-heading, .analysis-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px; }
 .comparison-card-heading > div, .analysis-card-heading > div { display: grid; min-width: 0; }
 .comparison-card-heading strong, .analysis-card-heading strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .comparison-card-heading span:not(.status), .analysis-card-heading span:not(.status) { color: var(--muted); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.comparison-images, .analysis-images { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); height: 270px; background: #101110; border-block: 1px solid var(--line); }
+.comparison-images { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); min-height: 270px; background: #101110; border-block: 1px solid var(--line); }
+.comparison-model-images { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; border-right: 1px solid var(--line); }
+.comparison-model-images:last-child { border-right: 0; }
+.comparison-model-label { padding: 6px 9px; color: var(--muted); background: #151715; border-bottom: 1px solid var(--line); font-size: 11px; }
+.comparison-model-panes { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); min-width: 0; height: 270px; }
+.analysis-images { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); height: 270px; background: #101110; border-block: 1px solid var(--line); }
 .comparison-scores, .analysis-scores { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 9px; color: var(--muted); font-size: 11px; }
 .comparison-scores span, .analysis-scores span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .breakdown-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
@@ -259,7 +268,9 @@ dialog::backdrop { background: rgba(0,0,0,.78); }
   .legend-controls { flex-wrap: wrap; }
   .legend-controls span { flex: 1 1 auto; margin-right: 0; }
   .aux-outcomes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .comparison-images { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); height: 480px; }
+  .comparison-images { grid-template-columns: 1fr; }
+  .comparison-model-images { border-right: 0; border-bottom: 1px solid var(--line); }
+  .comparison-model-images:last-child { border-bottom: 0; }
   .analysis-images { height: 360px; }
   .comparison-scores, .analysis-scores { grid-template-columns: 1fr; }
   .breakdown-grid { grid-template-columns: 1fr; }

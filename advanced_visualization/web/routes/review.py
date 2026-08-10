@@ -127,6 +127,11 @@ def review(request: FilterRequest) -> dict:
                 "genuine_gradcam_url": genuine_url,
                 "fraud_gradcam_url": fraud_url,
                 "gradcam_layers": layer_urls,
+                "montage_url": image_url(
+                    request.source_id,
+                    row_id,
+                    schema_details.get("gradcam_montage_column", ""),
+                ),
             }
         )
     return metadata | {"rows": rows}

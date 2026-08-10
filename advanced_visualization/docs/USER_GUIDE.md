@@ -12,6 +12,10 @@ Open <http://localhost:8000>. A successful service also reports `{"status":"ok"}
 
 The source selector lists enabled CSVs from `advanced_visualization/settings.json`. If no source appears, verify that the configured CSV exists and the model is enabled.
 
+Canonical prediction datasets are configured with `prediction_datasets`. Each
+entry provides a dataset key, display label, and CSV path. Model-specific
+feature vectors remain separate sources and are not copied into these CSVs.
+
 ## Image review
 
 Use this page to inspect one experiment:
@@ -74,7 +78,7 @@ The Streamlit Settings page can edit the JSON:
 streamlit run advanced_visualization/unified_app.py
 ```
 
-Path compatibility includes the known `/routine_data/...` to `/mnt5/routine_data/...` mount alias. Prefer storing paths that are valid in the deployment environment and mount external directories into Docker explicitly.
+Paths must be valid in the deployment environment. Visualization artifacts live under `/mnt4/advanced_visualization`, while source images use their explicit mounted paths such as `/routine_data/...`.
 
 ## Prepare data and Grad-CAM
 

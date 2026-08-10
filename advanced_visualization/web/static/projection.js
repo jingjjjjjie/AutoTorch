@@ -13,6 +13,21 @@ let plot = null;
 let projectionRequest = 0;
 let pointRequest = 0;
 
+function colorConfig() {
+  return {
+    mode: byId("feature-color-mode").value,
+    valueColumn: byId("feature-color-score").value,
+    threshold: Number(byId("feature-color-threshold").value),
+  };
+}
+
+function colorLegendTitle(request) {
+  const config = colorConfig();
+  return config.mode === "category"
+    ? request.color_column || "All points"
+    : config.valueColumn || "Prediction score";
+}
+
 function updateDisplayedCount(visible, total) {
   byId("displayed-image-count").textContent = visible.toLocaleString();
   byId("displayed-image-total").textContent = visible === total
@@ -117,6 +132,7 @@ function projectionPayload(sourceId) {
     feature_columns: state.schema.feature_columns,
     item_id_column: byId("item-column").value,
     color_column: byId("color-column").value,
+    color_value_column: byId("feature-color-score").value,
     categorical_filters: categoricalFilters(),
     scale: byId("scale-features").checked,
     max_rows: Number(byId("max-rows").value),
@@ -149,7 +165,7 @@ export async function loadProjection(setBusy, showError) {
       ? `${result.rows.toLocaleString()} of ${result.available_rows.toLocaleString()} filtered points.`
       : `${result.rows.toLocaleString()} points.`;
     byId("projection-summary").textContent = `${countSummary} ${result.subtitle}`.trim();
-    plot.setData(result.points, request.color_column || "All points");
+    plot.setData(result.points, colorLegendTitle(request), colorConfig());
     showError("");
   } catch (error) {
     if (requestId === projectionRequest && state.source?.id === sourceId) {
@@ -166,6 +182,17 @@ export async function loadProjection(setBusy, showError) {
 }
 
 export function bindProjection(setBusy, showError) {
+  const savedMode = localStorage.getItem("autotorch-feature-color-mode");
+  const savedThreshold = Number(
+    localStorage.getItem("autotorch-feature-color-threshold")
+  );
+  if (["category", "threshold", "heatmap"].includes(savedMode)) {
+    byId("feature-color-mode").value = savedMode;
+  }
+  if (Number.isFinite(savedThreshold) && savedThreshold >= 0 && savedThreshold <= 1) {
+    byId("feature-color-threshold").value = String(savedThreshold);
+    byId("feature-color-threshold-value").value = savedThreshold.toFixed(2);
+  }
   plot = createScatterPlot({
     onPointSelect: point => showPoint(point, showError),
     onVisibleCount: updateDisplayedCount,
@@ -188,6 +215,34 @@ export function bindProjection(setBusy, showError) {
   };
   byId("projection-method").addEventListener("change", updateMethodFields);
   updateMethodFields();
+  const updateColorFields = () => {
+    const mode = byId("feature-color-mode").value;
+    localStorage.setItem("autotorch-feature-color-mode", mode);
+    localStorage.setItem(
+      "autotorch-feature-color-threshold",
+      byId("feature-color-threshold").value,
+    );
+    byId("feature-category-label").textContent = mode === "category"
+      ? "Color category"
+      : "Sampling groups";
+    byId("feature-color-score-field").classList.toggle("hidden", mode === "category");
+    byId("feature-color-threshold-field").classList.toggle("hidden", mode !== "threshold");
+    if (state.projection) {
+      const request = projectionPayload(state.source.id);
+      plot.setColoring(colorLegendTitle(request), colorConfig());
+    }
+  };
+  byId("feature-color-mode").addEventListener("change", updateColorFields);
+  byId("feature-color-threshold").addEventListener("input", event => {
+    byId("feature-color-threshold-value").value = Number(event.target.value).toFixed(2);
+    updateColorFields();
+  });
+  byId("feature-color-score").addEventListener("change", () => {
+    if (state.projection) {
+      byId("projection-summary").textContent = "Score column changed. Run the projection to update.";
+    }
+  });
+  updateColorFields();
   byId("plot-fullscreen").addEventListener("click", () => {
     const layout = document.querySelector(".projection-layout");
     const fullscreen = layout.classList.toggle("fullscreen");

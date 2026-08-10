@@ -163,13 +163,20 @@ class ProjectionService:
 
         displayed_labels = _labels(working, request.color_column)
         displayed_item_ids = _item_ids(working, request.item_id_column)
+        if request.color_value_column in working.columns:
+            displayed_color_values = pd.to_numeric(
+                working[request.color_value_column], errors="coerce"
+            )
+        else:
+            displayed_color_values = pd.Series(np.nan, index=working.index)
         displayed_counts = displayed_labels.value_counts().to_dict()
         points = []
-        for position, (row_id, label, item_id) in enumerate(
+        for position, (row_id, label, item_id, color_value) in enumerate(
             zip(
                 working["__row_id"].tolist(),
                 displayed_labels.tolist(),
                 displayed_item_ids.tolist(),
+                displayed_color_values.tolist(),
             )
         ):
             points.append(
@@ -179,6 +186,9 @@ class ProjectionService:
                     "row_id": int(row_id),
                     "label": label,
                     "item_id": item_id,
+                    "color_value": (
+                        float(color_value) if np.isfinite(color_value) else None
+                    ),
                 }
             )
         class_counts = [
@@ -195,6 +205,11 @@ class ProjectionService:
             "rows": len(points),
             "available_rows": len(candidate),
             "class_counts": class_counts,
+            "color_value_column": (
+                request.color_value_column
+                if request.color_value_column in working.columns
+                else ""
+            ),
             "points": points,
         }
         with self._lock:

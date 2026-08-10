@@ -1,5 +1,17 @@
 {
-  "prediction_csv": "/home/jingjie/AutoTorch/src/eval/idfraud/annotation/joined_predictions.csv",
+  "prediction_csv": "/home/jingjie/AutoTorch/src/eval/idfraud/annotation/joined_predictions_30june.csv",
+  "prediction_datasets": [
+    {
+      "key": "main_evaluation",
+      "label": "Main evaluation predictions through June",
+      "path": "/home/jingjie/AutoTorch/src/eval/idfraud/annotation/joined_predictions_30june.csv"
+    },
+    {
+      "key": "realistic_internal_testing",
+      "label": "Realistic internal testing predictions",
+      "path": "/home/jingjie/AutoTorch/logs/realistic_internal_testing_visualization/artifacts/index_annotation_with_predictions.csv"
+    }
+  ],
   "manifest_name": "visualization_manifest.json",
   "prepared_csv_name": "prepared_predictions.csv",
   "default_gradcam_root": "/mnt4/advanced_visualization",
@@ -215,32 +227,77 @@
   "models": [
     {
       "model_id": "Ex8point2_UniRepLKNet_T_legacy_v1_512_ori_epoch10",
-      "data_dir": "/mnt5/temp_jj/Ex8point2_UniRepLKNet_T_legacy_v1_512_ori",
+      "data_dir": "/mnt4/advanced_visualization/Ex8point2_UniRepLKNet_T_legacy_v1_512_ori_epoch10",
       "enabled": true
     },
     {
       "model_id": "Ex8point4_UniRepLKNet_B_in22k_legacy_v1_512_crop_epoch7",
-      "data_dir": "/mnt5/temp_jj/Ex8point4_UniRepLKNet_B_in22k_legacy_v1_512_crop",
+      "data_dir": "/mnt4/advanced_visualization/Ex8point4_UniRepLKNet_B_in22k_legacy_v1_512_crop_epoch7",
       "enabled": true
     },
     {
       "model_id": "Ex8point2res1024_moredata_largerbs_UniRepLKNet_T_legacy_v1_1024_ori_epoch11",
-      "data_dir": "/mnt5/temp_jj/Ex8point2res1024_moredata_largerbs_UniRepLKNet_T_legacy_v1_1024_ori",
+      "data_dir": "/mnt4/advanced_visualization/Ex8point2res1024_moredata_largerbs_UniRepLKNet_T_legacy_v1_1024_ori_epoch11",
       "enabled": true
     },
     {
       "model_id": "square_exp2_Ex8point2res1024_largerbs_21plusaugfeb_UniRepLKNet_T_legacy_v1_1024_ori_epoch8",
-      "data_dir": "/mnt5/temp_jj/square_exp2_Ex8point2res1024_largerbs_21plusaugfeb_UniRepLKNet_T_legacy_v1_1024_ori",
+      "data_dir": "/mnt4/advanced_visualization/square_exp2_Ex8point2res1024_largerbs_21plusaugfeb_UniRepLKNet_T_legacy_v1_1024_ori_epoch8",
+      "enabled": true
+    },
+    {
+      "model_id": "InternEnch_Ex8point2res1024largerb",
+      "data_dir": "/mnt4/advanced_visualization/InternEnch_Ex8point2res1024largerb",
       "enabled": true
     },
     {
       "model_id": "ench21_vansmall_ori",
-      "data_dir": "/mnt5/temp_jj/ench21_vansmall_ori",
+      "data_dir": "/mnt4/advanced_visualization/ench21_vansmall_ori",
       "enabled": true
     },
     {
       "model_id": "ench21_vansmall_crop",
-      "data_dir": "/mnt5/temp_jj/ench21_vansmall_crop",
+      "data_dir": "/mnt4/advanced_visualization/ench21_vansmall_crop",
+      "enabled": true
+    },
+    {
+      "model_id": "realistic_internal_1024_square_ori",
+      "data_dir": "/home/jingjie/AutoTorch/logs/realistic_internal_testing_visualization/artifacts/realistic_internal_1024_square_ori",
+      "enabled": true
+    },
+    {
+      "model_id": "realistic_internal_1024_largerbs_ori",
+      "data_dir": "/home/jingjie/AutoTorch/logs/realistic_internal_testing_visualization/artifacts/realistic_internal_1024_largerbs_ori",
+      "enabled": true
+    },
+    {
+      "model_id": "realistic_internal_ench21_vansmall_ori",
+      "data_dir": "/home/jingjie/AutoTorch/logs/realistic_internal_testing_visualization/artifacts/realistic_internal_ench21_vansmall_ori",
+      "enabled": true
+    },
+    {
+      "model_id": "realistic_internal_ench21_vansmall_crop",
+      "data_dir": "/home/jingjie/AutoTorch/logs/realistic_internal_testing_visualization/artifacts/realistic_internal_ench21_vansmall_crop",
+      "enabled": true
+    },
+    {
+      "model_id": "realistic_internal_ench21_overfitaffin_ori",
+      "data_dir": "/home/jingjie/AutoTorch/logs/realistic_internal_testing_visualization/artifacts/realistic_internal_ench21_overfitaffin_ori",
+      "enabled": true
+    },
+    {
+      "model_id": "realistic_internal_ench21_overfitaffin_crop",
+      "data_dir": "/home/jingjie/AutoTorch/logs/realistic_internal_testing_visualization/artifacts/realistic_internal_ench21_overfitaffin_crop",
+      "enabled": true
+    },
+    {
+      "model_id": "realistic_internal_ench21_internalenhanced_ori_ckpt12",
+      "data_dir": "/home/jingjie/AutoTorch/logs/realistic_internal_testing_visualization/artifacts/realistic_internal_ench21_internalenhanced_ori_ckpt12",
+      "enabled": true
+    },
+    {
+      "model_id": "realistic_internal_ench21_internalenhanced_crop_ckpt17",
+      "data_dir": "/home/jingjie/AutoTorch/logs/realistic_internal_testing_visualization/artifacts/realistic_internal_ench21_internalenhanced_crop_ckpt17",
       "enabled": true
     }
   ]

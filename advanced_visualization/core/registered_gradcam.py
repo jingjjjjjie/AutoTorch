@@ -46,6 +46,10 @@ def _manifest(route: ModelRoute, artifact_dir: Path) -> dict[str, Any]:
         "checkpoint": str(route.checkpoint) if route.checkpoint else "",
         "framework": route.framework,
         "engine": route.engine,
+        "branch": route.branch,
+        "model_name": route.model_name,
+        "head_type": route.head_type,
+        "image_size": route.image_size,
         "columns": route.columns,
         "gradcam": {
             "method": "gradcam++",
@@ -66,6 +70,11 @@ def _manifest(route: ModelRoute, artifact_dir: Path) -> dict[str, Any]:
             "allow_upscale": False,
             "original_image": "separate_reference",
             "quantitative_saliency_data": False,
+        },
+        "review": {
+            "prepared_gradcam_layers": [
+                layer.key for layer in route.final_layers
+            ],
         },
     }
 

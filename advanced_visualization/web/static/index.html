@@ -74,7 +74,9 @@
             <button type="button" class="active" data-value="original">Original</button>
             <button type="button" data-value="gradcam">Grad-CAM</button>
             <button type="button" data-value="both">Original + CAM</button>
+            <button type="button" data-value="original_genuine">Grad-CAM Genuine vs Original</button>
             <button type="button" data-value="side_by_side">Genuine vs Fraud</button>
+            <button type="button" data-value="original_both">Original + Grad-CAM Genuine + Fraud</button>
             <button type="button" data-value="montage">Layer montage</button>
           </div>
           <label class="field"><span>Sort</span><select id="sort">
@@ -96,7 +98,10 @@
         <section>
           <h2>Projection</h2>
           <label class="field"><span>Method</span><select id="projection-method"><option value="pca">PCA</option><option value="tsne">t-SNE</option><option value="umap">UMAP</option><option value="lda">LDA</option></select></label>
-          <label class="field"><span>Color by</span><select id="color-column"></select></label>
+          <label class="field"><span id="feature-category-label">Color category</span><select id="color-column"></select></label>
+          <label class="field"><span>Color style</span><select id="feature-color-mode"><option value="category">Categories</option><option value="threshold">Score threshold</option><option value="heatmap">Score heatmap</option></select></label>
+          <label id="feature-color-score-field" class="field hidden"><span>Score</span><select id="feature-color-score"></select></label>
+          <label id="feature-color-threshold-field" class="field hidden"><span>Split threshold <output id="feature-color-threshold-value">0.50</output></span><input id="feature-color-threshold" type="range" min="0" max="1" value="0.5" step="0.01"></label>
           <label class="field"><span>Image</span><select id="feature-image-column"></select></label>
           <label class="field"><span>Grad-CAM</span><select id="feature-gradcam-column"></select></label>
           <label class="field"><span>CAM layer</span><select id="feature-gradcam-layer"></select></label>
@@ -156,7 +161,8 @@
           <label class="field"><span>A CAM layer</span><select id="comparison-gradcam-layer-a"></select></label>
           <label class="field"><span>B CAM layer</span><select id="comparison-gradcam-layer-b"></select></label>
           <label class="field"><span>CAM method</span><select id="comparison-gradcam-method"><option value="gradcam++">Grad-CAM++</option></select></label>
-          <label class="field"><span>CAM target</span><select id="comparison-gradcam-target"><option value="fraud">Fraud evidence</option><option value="genuine">Genuine evidence</option><option value="both">Genuine + Fraud side by side</option></select></label>
+          <label class="field"><span>Visualization</span><select id="comparison-gradcam-target"><option value="fraud">Original + Fraud</option><option value="genuine">Original + Genuine</option><option value="both">Original + Genuine + Fraud</option></select></label>
+          <label class="field"><span>Comparisons per row</span><select id="comparison-columns"><option value="1">1 per row</option><option value="2" selected>2 per row</option></select></label>
         </section>
         <section>
           <h2>Metadata and filters</h2>
@@ -182,8 +188,8 @@
 
       <form id="analysis-controls" class="control-stack hidden">
         <section>
-          <h2>Notebook dataset</h2>
-          <label class="field"><span>Data source</span><select id="analysis-source"></select></label>
+          <h2>Prediction analysis</h2>
+          <label class="field hidden"><span>Data source</span><select id="analysis-source"></select></label>
           <label class="field"><span>Item ID</span><select id="analysis-item"></select></label>
           <label class="field"><span>Truth</span><select id="analysis-truth"></select></label>
           <label class="field"><span>Original prediction</span><select id="analysis-ori-prediction"></select></label>

@@ -14,3 +14,4 @@ torch
 torchinfo
 tqdm
 omegaconf
+timm>=0.9

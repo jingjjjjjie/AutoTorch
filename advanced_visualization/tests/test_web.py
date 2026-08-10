@@ -13,7 +13,7 @@ from advanced_visualization.core.gradcam_cache import (
     gradcam_file_index,
 )
 from advanced_visualization.core.heatmap import jet_overlay
-from advanced_visualization.core.images import image_cache_digest
+from advanced_visualization.core.images import image_cache_digest, image_cache_digests
 from advanced_visualization.web.filtering import filter_frame, page_frame
 from advanced_visualization.web.images import image_bytes
 from advanced_visualization.web.models import FilterRequest, ProjectionRequest
@@ -92,6 +92,33 @@ def test_image_cache_digest_changes_when_image_changes(tmp_path: Path) -> None:
     image_path.write_bytes(b"a different image payload")
 
     assert image_cache_digest(image_path) != first
+
+
+def test_gradcam_cache_candidates_include_configured_path_alias(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    routine_root = tmp_path / "routine_data"
+    image_path = routine_root / "batch" / "image.jpg"
+    image_path.parent.mkdir(parents=True)
+    image_path.write_bytes(b"image")
+    monkeypatch.setenv(
+        "AUTOTORCH_IMAGE_CACHE_PATH_ALIASES",
+        f"{routine_root}=/mnt5/routine_data",
+    )
+
+    digests = image_cache_digests(image_path)
+    candidates = gradcam_cache_candidates(
+        tmp_path / "gradcam",
+        image_path,
+        method="gradcam++",
+        target="fraud",
+        layer="stage4",
+    )
+
+    assert len(digests) == 2
+    assert image_cache_digest(image_path) == digests[0]
+    assert candidates[0].name.startswith(digests[0])
+    assert candidates[3].name.startswith(digests[1])
 
 
 @pytest.mark.parametrize(
@@ -224,7 +251,8 @@ def test_schema_prefers_available_image_and_detects_montage(tmp_path: Path) -> N
     schema = repository.schema("source")
 
     assert schema["defaults"]["image_column"] == "absolute_crop_path"
-    assert schema["gradcam_columns"] == ["tf_crop_layer_montage_path"]
+    assert schema["gradcam_columns"] == []
+    assert schema["gradcam_montage_column"] == "tf_crop_layer_montage_path"
     assert schema["image_availability"]["ori_path"] == 0.0
     assert repository.schema("source") is schema
 
@@ -258,6 +286,7 @@ def test_projection_returns_finite_points() -> None:
             "feature_0": [0.0, 1.0, 2.0, 3.0, 4.0],
             "feature_1": [2.0, 1.0, 0.0, 1.0, 2.0],
             "group": ["a", "a", "b", "b", "b"],
+            "score": [0.0, 0.25, 0.5, 0.75, None],
         }
     )
     request = ProjectionRequest(
@@ -265,6 +294,7 @@ def test_projection_returns_finite_points() -> None:
         feature_columns=["feature_0", "feature_1"],
         item_id_column="uuid",
         color_column="group",
+        color_value_column="score",
         max_rows=5,
     )
 
@@ -280,6 +310,14 @@ def test_projection_returns_finite_points() -> None:
         "uuid-3",
         "uuid-4",
     }
+    assert [point["color_value"] for point in result["points"]] == [
+        0.0,
+        0.25,
+        0.5,
+        0.75,
+        None,
+    ]
+    assert result["color_value_column"] == "score"
     assert all(
         np.isfinite(point["x"]) and np.isfinite(point["y"])
         for point in result["points"]

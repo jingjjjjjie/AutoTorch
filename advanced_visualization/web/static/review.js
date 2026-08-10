@@ -52,7 +52,7 @@ function updateGalleryLayout() {
   const cardWidth = card.getBoundingClientRect().width;
   const mediaHeight = state.imageMode === "montage"
     ? Math.min(760, Math.max(420, 360 + cardWidth * 0.55))
-    : ["both", "side_by_side"].includes(state.imageMode)
+    : ["both", "original_genuine", "side_by_side", "original_both"].includes(state.imageMode)
     ? Math.min(360, Math.max(190, 175 + cardWidth * 0.26))
     : Math.min(540, Math.max(215, 180 + cardWidth * 0.6));
   gallery.style.setProperty("--card-media-height", `${Math.round(mediaHeight)}px`);
@@ -91,22 +91,32 @@ function renderRows(rows, payload) {
       ? reviewImagePane(row.genuine_gradcam_url, `${payload.gradcam_layer} · Genuine`)
         + reviewImagePane(row.fraud_gradcam_url, `${payload.gradcam_layer} · Fraud`)
       : reviewImagePane(selectedCam, `${payload.gradcam_layer} · ${targetLabel}`);
-    const montagePanes = (row.gradcam_layers || []).map(layer => {
-      if (payload.gradcam_target === "genuine") return reviewImagePane(layer.genuine_url, `${layer.layer} · Genuine`);
-      if (payload.gradcam_target === "fraud") return reviewImagePane(layer.fraud_url, `${layer.layer} · Fraud`);
-      return reviewImagePane(layer.genuine_url, `${layer.layer} · Genuine`)
-        + reviewImagePane(layer.fraud_url, `${layer.layer} · Fraud`);
-    }).join("");
-    const panes = state.imageMode === "both"
-      ? reviewImagePane(row.image_url, "Original") + targetPanes
-      : state.imageMode === "gradcam"
-        ? targetPanes
-        : state.imageMode === "side_by_side"
-          ? reviewImagePane(row.genuine_gradcam_url, `${payload.gradcam_layer} · Genuine`)
-            + reviewImagePane(row.fraud_gradcam_url, `${payload.gradcam_layer} · Fraud`)
-          : state.imageMode === "montage"
-            ? montagePanes
-            : reviewImagePane(row.image_url, "Original");
+    const montageLayers = (state.schema.gradcam_montage_layers || []).map(
+      layer => state.schema.gradcam_montage_layer_labels?.[layer] || layer,
+    );
+    const montagePanes = reviewImagePane(
+      row.montage_url,
+      `Layer montage${montageLayers.length ? ` · ${montageLayers.join(", ")}` : ""}`,
+    );
+    const originalPane = reviewImagePane(row.image_url, "Original");
+    const genuinePane = reviewImagePane(
+      row.genuine_gradcam_url,
+      `${payload.gradcam_layer} · Genuine`,
+    );
+    const fraudPane = reviewImagePane(
+      row.fraud_gradcam_url,
+      `${payload.gradcam_layer} · Fraud`,
+    );
+    const panesByMode = {
+      original: originalPane,
+      gradcam: targetPanes,
+      both: originalPane + targetPanes,
+      original_genuine: genuinePane + originalPane,
+      side_by_side: genuinePane + fraudPane,
+      original_both: originalPane + genuinePane + fraudPane,
+      montage: montagePanes,
+    };
+    const panes = panesByMode[state.imageMode] || originalPane;
     const card = document.createElement("article");
     card.className = "card";
     card.innerHTML = `<div class="card-images ${state.imageMode === "montage" ? "montage" : ""}">${panes}</div><div class="card-body">

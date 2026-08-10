@@ -53,6 +53,9 @@ class ModelRoute:
     image_size: int
     columns: dict[str, str]
     layers: tuple[GradcamLayerRoute, ...]
+    prepared_gradcam_layers: tuple[str, ...] | None = None
+    gradcam_montage_column: str = ""
+    gradcam_montage_layers: tuple[str, ...] = ()
     branch: str = ""
     review_preset: dict[str, Any] = field(default_factory=dict)
 
@@ -140,6 +143,10 @@ def load_model_route(model_id: str, data_dir: Path | str) -> ModelRoute:
     if not SAFE_ID.fullmatch(model_id):
         raise ValueError(f"Invalid model_id: {model_id!r}")
     directory = Path(data_dir).expanduser()
+    if not directory.exists():
+        from advanced_visualization.core.settings import configured_path
+
+        directory = configured_path(str(directory))
     router_path = directory / ROUTER_FILENAME
     if not router_path.is_file():
         raise FileNotFoundError(f"Model router does not exist: {router_path}")
@@ -169,6 +176,29 @@ def load_model_route(model_id: str, data_dir: Path | str) -> ModelRoute:
     )
     checkpoint = _path(raw.get("checkpoint"), directory)
     layers = _layer_routes(raw.get("layers"))
+    layer_keys = {layer.key for layer in layers}
+    raw_prepared_layers = raw.get("prepared_gradcam_layers")
+    prepared_gradcam_layers = (
+        tuple(str(item) for item in raw_prepared_layers)
+        if raw_prepared_layers is not None
+        else None
+    )
+    if prepared_gradcam_layers is not None:
+        unknown = set(prepared_gradcam_layers) - layer_keys
+        if unknown:
+            raise ValueError(
+                f"Unknown prepared Grad-CAM layers in {router_path}: "
+                f"{', '.join(sorted(unknown))}"
+            )
+    gradcam_montage_layers = tuple(
+        str(item) for item in raw.get("gradcam_montage_layers") or ()
+    )
+    unknown_montage_layers = set(gradcam_montage_layers) - layer_keys
+    if unknown_montage_layers:
+        raise ValueError(
+            f"Unknown montage layers in {router_path}: "
+            f"{', '.join(sorted(unknown_montage_layers))}"
+        )
     framework = str(raw.get("framework") or "artifact").strip().lower()
     artifact_root = Path(
         os.environ.get(
@@ -176,11 +206,12 @@ def load_model_route(model_id: str, data_dir: Path | str) -> ModelRoute:
             str(DEFAULT_ARTIFACT_ROOT),
         )
     ).expanduser()
+    routed_artifact_dir = _path(raw.get("artifact_dir"), directory)
     return ModelRoute(
         model_id=model_id,
         data_dir=directory,
         router_path=router_path,
-        artifact_dir=artifact_root / model_id,
+        artifact_dir=routed_artifact_dir or artifact_root / model_id,
         prediction_data=prediction_data,
         feature_data=_path(raw.get("feature_data") or raw.get("feature_csv"), directory),
         checkpoint=checkpoint,
@@ -191,6 +222,11 @@ def load_model_route(model_id: str, data_dir: Path | str) -> ModelRoute:
         image_size=int(raw.get("image_size") or 0),
         columns=columns,
         layers=layers,
+        prepared_gradcam_layers=prepared_gradcam_layers,
+        gradcam_montage_column=str(
+            raw.get("gradcam_montage_column") or ""
+        ).strip(),
+        gradcam_montage_layers=gradcam_montage_layers,
         branch=str(raw.get("branch") or ""),
         review_preset=dict(raw.get("review_preset") or {}),
     )
@@ -205,7 +241,12 @@ def registered_model_routes() -> dict[str, ModelRoute]:
     for model in load_settings().models:
         if not model.enabled or not model.key.strip() or not model.data_dir.strip():
             continue
-        routes[model.key] = load_model_route(model.key, model.data_dir)
+        try:
+            routes[model.key] = load_model_route(model.key, model.data_dir)
+        except FileNotFoundError:
+            # A registered output workspace may be intentionally absent while it
+            # is being rebuilt. Other complete model registrations remain usable.
+            continue
     return routes
 
 

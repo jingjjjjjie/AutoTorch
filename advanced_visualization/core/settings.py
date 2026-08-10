@@ -189,6 +189,7 @@ DEFAULT_EXTRA_VIEW_CONFIGS = [
 @dataclass
 class UserSettings:
     prediction_csv: str = ""
+    prediction_datasets: list[dict[str, str]] = field(default_factory=list)
     manifest_name: str = ""
     prepared_csv_name: str = ""
     default_gradcam_root: str = ""
@@ -209,6 +210,15 @@ class UserSettings:
     def from_dict(cls, payload: dict[str, Any]) -> "UserSettings":
         return cls(
             prediction_csv=str(payload.get("prediction_csv", "")),
+            prediction_datasets=[
+                {
+                    "key": str(item.get("key", "")),
+                    "label": str(item.get("label", "")),
+                    "path": str(item.get("path", "")),
+                }
+                for item in payload.get("prediction_datasets", [])
+                if isinstance(item, dict)
+            ],
             manifest_name=str(payload.get("manifest_name", "")),
             prepared_csv_name=str(payload.get("prepared_csv_name", "")),
             default_gradcam_root=str(payload.get("default_gradcam_root", "")),
@@ -243,6 +253,7 @@ class UserSettings:
     def to_dict(self) -> dict[str, Any]:
         return {
             "prediction_csv": self.prediction_csv,
+            "prediction_datasets": self.prediction_datasets,
             "manifest_name": self.manifest_name,
             "prepared_csv_name": self.prepared_csv_name,
             "default_gradcam_root": self.default_gradcam_root,

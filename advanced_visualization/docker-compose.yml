@@ -12,11 +12,12 @@ services:
       - /routine_data:/routine_data
       - /mnt3:/mnt3
       - /mnt4:/mnt4
-      - /mnt5:/mnt5
       - /tmp:/tmp
+      - /home/jingjie/AutoTorch:/home/jingjie/AutoTorch:ro
     working_dir: /app
     environment:
       TF_VAN_LIVE_URL: http://tensorflow-vansmall-live:8701
+      AUTOTORCH_IMAGE_CACHE_PATH_ALIASES: /routine_data=/mnt5/routine_data
     depends_on:
       - tensorflow-vansmall-live
     shm_size: "2gb"
@@ -35,9 +36,9 @@ services:
       - ${IDRECAPTURE_REPO_PATH:-/home/jingjie/Dev/automl_platform/idrecapture_server}:/idrecapture_server:ro
       - /mnt3:/mnt3:ro
       - /mnt4:/mnt4
-      - /mnt5:/mnt5:ro
       - /routine_data:/routine_data:ro
     environment:
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
       CUDA_VISIBLE_DEVICES: ${VANSMALL_CUDA_VISIBLE_DEVICES:-0}
       VANSMALL_GPU_MEMORY_LIMIT_MB: ${VANSMALL_GPU_MEMORY_LIMIT_MB:-2400}
       ADVANCED_VISUALIZATION_ARTIFACT_ROOT: /mnt4/advanced_visualization

@@ -31,6 +31,9 @@ VANSMALL_CUDA_VISIBLE_DEVICES=0 \
 docker compose -f advanced_visualization/docker-compose.yml up --build
 ```
 
+GPU indices use PCI-bus order. On the current visualization host, the default
+device `0` is an NVIDIA GeForce RTX 3090.
+
 Open `http://localhost:8001`, choose **Live inference**, select the original or
 crop VAN Small model, and upload the corresponding image view. The first call
 loads the selected 156 MB checkpoint; later calls reuse the cached Keras model.

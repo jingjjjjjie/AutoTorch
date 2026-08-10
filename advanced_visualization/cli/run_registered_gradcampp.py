@@ -22,7 +22,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model-id", action="append", default=[])
     parser.add_argument("--phase", choices=["all", "final", "lower"], default="all")
-    parser.add_argument("--gpu", type=int, default=2)
+    parser.add_argument("--gpu", type=int, default=0)
     parser.add_argument("--memory-limit-mib", type=int, default=3000)
     parser.add_argument("--allocator-limit-mib", type=int, default=2400)
     parser.add_argument("--limit", type=int)

@@ -13,6 +13,28 @@ function clamp(value, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
+function heatColor(value) {
+  const stops = [
+    [0.00, [48, 18, 59]],
+    [0.24, [70, 107, 227]],
+    [0.48, [26, 228, 182]],
+    [0.72, [249, 231, 33]],
+    [1.00, [215, 25, 28]],
+  ];
+  const normalized = clamp(Number(value), 0, 1);
+  for (let index = 1; index < stops.length; index += 1) {
+    if (normalized > stops[index][0]) continue;
+    const [leftAt, left] = stops[index - 1];
+    const [rightAt, right] = stops[index];
+    const ratio = (normalized - leftAt) / (rightAt - leftAt);
+    const rgb = left.map((channel, channelIndex) =>
+      Math.round(channel + (right[channelIndex] - channel) * ratio)
+    );
+    return `rgb(${rgb.join(",")})`;
+  }
+  return "rgb(215,25,28)";
+}
+
 function dataBounds(points) {
   let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
   for (const point of points) {
@@ -45,6 +67,7 @@ export function createScatterPlot({ onPointSelect, onVisibleCount }) {
   let labelCounts = new Map();
   let colors = new Map();
   let hiddenLabels = new Set();
+  let coloring = { mode: "category", threshold: 0.5, valueColumn: "" };
   let home = null;
   let view = null;
   let zoomLevel = 1;
@@ -89,6 +112,25 @@ export function createScatterPlot({ onPointSelect, onVisibleCount }) {
     cancelLegendClick();
     legend.replaceChildren();
     legendControls.classList.toggle("hidden", !labels.length);
+    const continuous = coloring.mode === "heatmap";
+    byId("legend-show-all").classList.toggle("hidden", continuous);
+    byId("legend-hide-all").classList.toggle("hidden", continuous);
+    if (continuous) {
+      byId("legend-summary").textContent = `${points.length.toLocaleString()} points`;
+      const scale = document.createElement("div");
+      scale.className = "heatmap-legend";
+      const low = document.createElement("span");
+      low.className = "heatmap-endpoint";
+      low.textContent = "0.00";
+      const gradient = document.createElement("i");
+      gradient.className = "heatmap-gradient";
+      const high = document.createElement("span");
+      high.className = "heatmap-endpoint";
+      high.textContent = "1.00";
+      scale.append(low, gradient, high);
+      legend.append(scale);
+      return;
+    }
     byId("legend-summary").textContent = `${labels.length - hiddenLabels.size}/${labels.length} shown`;
     byId("legend-show-all").disabled = hiddenLabels.size === 0;
     byId("legend-hide-all").disabled = hiddenLabels.size === labels.length;
@@ -176,14 +218,14 @@ export function createScatterPlot({ onPointSelect, onVisibleCount }) {
     let selectedPoint = null;
 
     for (const point of points) {
-      if (hiddenLabels.has(point.label)) continue;
+      if (hiddenLabels.has(point.plotLabel)) continue;
       const screenPoint = { ...point, sx: toX(point.x), sy: toY(point.y) };
       if (
         screenPoint.sx < PADDING - 4 || screenPoint.sx > bounds.width - PADDING + 4 ||
         screenPoint.sy < PADDING - 4 || screenPoint.sy > bounds.height - PADDING + 4
       ) continue;
-      if (!buckets.has(point.label)) buckets.set(point.label, []);
-      buckets.get(point.label).push(screenPoint);
+      if (!buckets.has(point.plotColor)) buckets.set(point.plotColor, []);
+      buckets.get(point.plotColor).push(screenPoint);
       const cellX = Math.floor(screenPoint.sx / HIT_CELL);
       const cellY = Math.floor(screenPoint.sy / HIT_CELL);
       const key = `${cellX}:${cellY}`;
@@ -197,13 +239,13 @@ export function createScatterPlot({ onPointSelect, onVisibleCount }) {
     context.rect(PADDING, PADDING, plotWidth, plotHeight);
     context.clip();
     context.globalAlpha = 0.76;
-    for (const [label, bucket] of buckets) {
+    for (const [color, bucket] of buckets) {
       context.beginPath();
       for (const point of bucket) {
         context.moveTo(point.sx + 3.2, point.sy);
         context.arc(point.sx, point.sy, 3.2, 0, Math.PI * 2);
       }
-      context.fillStyle = colors.get(label);
+      context.fillStyle = color;
       context.fill();
     }
     context.globalAlpha = 1;
@@ -243,7 +285,10 @@ export function createScatterPlot({ onPointSelect, onVisibleCount }) {
     const { point, x, y } = nearestPoint(clientX, clientY);
     tooltip.classList.toggle("hidden", !point);
     if (!point) return;
-    tooltip.textContent = `${point.item_id || `Row ${point.row_id}`} | ${point.label}`;
+    const score = Number.isFinite(point.colorValue)
+      ? ` | score ${point.colorValue.toFixed(4)}`
+      : "";
+    tooltip.textContent = `${point.item_id || `Row ${point.row_id}`} | ${point.plotLabel}${score}`;
     const bounds = canvas.getBoundingClientRect();
     tooltip.style.left = `${Math.max(4, Math.min(x + 10, bounds.width - tooltip.offsetWidth - 4))}px`;
     tooltip.style.top = `${Math.max(4, Math.min(y + 10, bounds.height - tooltip.offsetHeight - 4))}px`;
@@ -384,26 +429,79 @@ export function createScatterPlot({ onPointSelect, onVisibleCount }) {
   });
   new ResizeObserver(scheduleDraw).observe(canvas.parentElement);
 
-  return {
-    setData(nextPoints, legendTitle = "Subclasses") {
-      points = nextPoints;
-      labelCounts = new Map();
-      for (const point of points) {
-        labelCounts.set(point.label, (labelCounts.get(point.label) || 0) + 1);
+  function applyColoring(nextColoring = {}) {
+    const requestedThreshold = Number(nextColoring.threshold);
+    coloring = {
+      mode: nextColoring.mode || "category",
+      threshold: clamp(
+        Number.isFinite(requestedThreshold) ? requestedThreshold : 0.5,
+        0,
+        1,
+      ),
+      valueColumn: nextColoring.valueColumn || "",
+    };
+    labelCounts = new Map();
+    for (const point of points) {
+      const numeric = Number(point.color_value);
+      point.colorValue = point.color_value == null || !Number.isFinite(numeric)
+        ? null
+        : numeric;
+      if (coloring.mode === "threshold") {
+        point.plotLabel = point.colorValue == null
+          ? "Missing score"
+          : point.colorValue < coloring.threshold
+            ? `< ${coloring.threshold.toFixed(2)}`
+            : `≥ ${coloring.threshold.toFixed(2)}`;
+      } else if (coloring.mode === "heatmap") {
+        point.plotLabel = point.colorValue == null ? "Missing score" : "Score heatmap";
+      } else {
+        point.plotLabel = point.label;
       }
-      labels = [...labelCounts.keys()].sort();
-      colors = new Map(labels.map((label, index) => [label, palette[index % palette.length]]));
-      hiddenLabels = new Set();
+      labelCounts.set(
+        point.plotLabel,
+        (labelCounts.get(point.plotLabel) || 0) + 1,
+      );
+    }
+    labels = [...labelCounts.keys()].sort();
+    if (coloring.mode === "threshold") {
+      colors = new Map([
+        [`< ${coloring.threshold.toFixed(2)}`, "#52a8ff"],
+        [`≥ ${coloring.threshold.toFixed(2)}`, "#ff6b5f"],
+        ["Missing score", "#747a74"],
+      ]);
+    } else if (coloring.mode === "heatmap") {
+      colors = new Map([["Missing score", "#747a74"]]);
+    } else {
+      colors = new Map(
+        labels.map((label, index) => [label, palette[index % palette.length]])
+      );
+    }
+    for (const point of points) {
+      point.plotColor = coloring.mode === "heatmap" && point.colorValue != null
+        ? heatColor(point.colorValue)
+        : colors.get(point.plotLabel) || "#747a74";
+    }
+    hiddenLabels = new Set();
+    hideTooltip();
+    renderLegend();
+    updateCount();
+    scheduleDraw();
+  }
+
+  return {
+    setData(nextPoints, legendTitle = "Subclasses", nextColoring = {}) {
+      points = nextPoints.map(point => ({ ...point }));
       home = points.length ? dataBounds(points) : null;
       view = copyBounds(home);
       zoomLevel = 1;
       selectedRowId = null;
       byId("legend-title").textContent = legendTitle || "Subclasses";
-      hideTooltip();
-      renderLegend();
-      updateCount();
+      applyColoring(nextColoring);
       updateNavigation();
-      scheduleDraw();
+    },
+    setColoring(legendTitle, nextColoring = {}) {
+      byId("legend-title").textContent = legendTitle || "Subclasses";
+      applyColoring(nextColoring);
     },
     redraw: scheduleDraw,
     resetView,
